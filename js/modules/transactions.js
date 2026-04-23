@@ -210,3 +210,25 @@ export function saveExport() {
   closeModal(); 
   if(window.render) window.render();
 }
+// Thêm vào cuối file, trước export
+window.previewInvoiceImage = function() {
+    const file = document.getElementById('purchase-invoice')?.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        window.currentInvoiceBase64 = e.target.result;
+        const previewDiv = document.getElementById('invoice-preview');
+        if (previewDiv) {
+            previewDiv.innerHTML = `<img src="${window.currentInvoiceBase64}" class="invoice-img" onclick="window.open(this.src)"><br><button class="sm" onclick="clearInvoiceImage()">🗑️ Xóa ảnh</button>`;
+        }
+    };
+    reader.readAsDataURL(file);
+};
+
+window.clearInvoiceImage = function() {
+    window.currentInvoiceBase64 = null;
+    const previewDiv = document.getElementById('invoice-preview');
+    if (previewDiv) previewDiv.innerHTML = '';
+    const fileInput = document.getElementById('purchase-invoice');
+    if (fileInput) fileInput.value = '';
+};

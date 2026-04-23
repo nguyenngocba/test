@@ -51,6 +51,16 @@ window.debug = { state, saveState, addLog };
 
 // Initialize
 loadState();
+
+// Kiểm tra XLSX sau khi load
+setTimeout(() => {
+    if (typeof XLSX !== 'undefined') {
+        console.log('✅ Thư viện XLSX đã sẵn sàng');
+    } else {
+        console.warn('⚠️ Thư viện XLSX chưa được tải, export Excel sẽ không hoạt động');
+    }
+}, 1000);
+
 window.render = () => {
     const root = document.getElementById('root');
     if (!state.currentUser) {
