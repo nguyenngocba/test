@@ -1,8 +1,7 @@
-function loadView(name){
-  fetch(`views/${name}.html`)
-    .then(res => res.text())
-    .then(html => {
-      document.getElementById('app').innerHTML = html;
-      if(window.initModule) window.initModule(name);
-    });
-}
+<script>
+  const STORAGE_KEY...
+  ...
+</script>
+window.onload = function () {
+  loadState();
+};
