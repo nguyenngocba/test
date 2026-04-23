@@ -1,50 +1,25 @@
 import { appState } from '../../core/state.js';
 import { exportService } from '../../services/ExportService.js';
-import { transactionService } from '../../services/TransactionService.js';
 
 export const Topbar = {
     render() {
-        const currentPane = appState.getCurrentPane();
-        const titles = {
-            entry: 'Quản lý tồn kho',
-            dashboard: 'Bảng điều khiển trung tâm',
-            projects: 'Quản lý công trình',
-            suppliers: 'Quản lý nhà cung cấp',
-            logs: 'Nhật ký hệ thống',
-            settings: 'Cấu hình hệ thống'
-        };
-        
-        let buttons = '';
-        
-        if (currentPane === 'entry') {
-            buttons = `
-                <button class="sm" onclick="window.materialsPage?.showAddModal()">+ Thêm vật tư</button>
-                <button class="sm primary" onclick="window.openPurchaseModal()">📥 Nhập kho</button>
-                <button class="sm" onclick="window.openTxnModal('usage')">📤 Xuất kho</button>
-                <button class="sm" onclick="window.exportToExcel('materials')">📎 Export Excel</button>
-            `;
-        } else if (currentPane === 'projects') {
-            buttons = `
-                <button class="sm primary" onclick="window.projectsPage?.showAddModal()">+ Công trình mới</button>
-                <button class="sm" onclick="window.exportToExcel('projects')">📎 Export Excel</button>
-            `;
-        } else if (currentPane === 'suppliers') {
-            buttons = `
-                <button class="sm primary" onclick="window.suppliersPage?.showAddModal()">+ Nhà cung cấp mới</button>
-                <button class="sm" onclick="window.exportToExcel('suppliers')">📎 Export Excel</button>
-            `;
+        const pane = appState.getCurrentPane();
+        const titles = { entry: 'Quản lý kho', dashboard: 'Thống kê', projects: 'Công trình', suppliers: 'Nhà cung cấp', logs: 'Nhật ký', settings: 'Cài đặt' };
+        let btns = '';
+        if (pane === 'entry') {
+            btns = `<button class="sm" onclick="window.openMatModal()">+ Thêm vật tư</button>
+                    <button class="sm primary" onclick="window.openPurchaseModal()">📥 Nhập kho</button>
+                    <button class="sm" onclick="window.openTxnModal()">📤 Xuất kho</button>
+                    <button class="sm" onclick="window.exportToExcel('materials')">📎 Export</button>`;
+        } else if (pane === 'projects') {
+            btns = `<button class="sm primary" onclick="window.openProjectModal()">+ Công trình</button>
+                    <button class="sm" onclick="window.exportToExcel('projects')">📎 Export</button>`;
+        } else if (pane === 'suppliers') {
+            btns = `<button class="sm primary" onclick="window.openSupplierModal()">+ NCC</button>
+                    <button class="sm" onclick="window.exportToExcel('suppliers')">📎 Export</button>`;
         }
-        
-        return `
-            <div class="topbar">
-                <span class="topbar-title">${titles[currentPane] || ''}</span>
-                ${buttons}
-            </div>
-        `;
+        return `<div class="topbar"><span class="topbar-title">${titles[pane] || ''}</span><div style="display:flex;gap:8px">${btns}</div></div>`;
     }
 };
 
-// Global export handler
-window.exportToExcel = (type) => {
-    exportService.exportToExcel(type);
-};
+window.exportToExcel = (type) => exportService.exportToExcel(type);

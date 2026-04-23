@@ -1,7 +1,7 @@
 import { appState } from './state.js';
 import { eventBus, EVENTS } from './eventBus.js';
-import { storage } from './storage.js';
 import { router } from './router.js';
+import { storage } from './storage.js';
 import { loginPage } from '../views/pages/LoginPage.js';
 import { dashboardPage } from '../views/pages/DashboardPage.js';
 import { materialsPage } from '../views/pages/MaterialsPage.js';
@@ -24,27 +24,17 @@ class App {
         };
     }
 
-    async init() {
-        // Load saved data
+    init() {
         const savedData = storage.load();
         appState.load(savedData);
-        
-        // Setup event listeners
         this.setupEventListeners();
         
-        // Check authentication
         const savedUser = storage.getUser();
-        if (savedUser) {
-            appState.setCurrentUser(savedUser);
-        }
+        if (savedUser) appState.setCurrentUser(savedUser);
         
-        // Initial render
         this.render();
-        
-        // Setup router
         router.init();
         
-        // Log startup
         console.log('✅ SteelTrack Pro initialized');
     }
 
@@ -67,9 +57,7 @@ class App {
             this.render();
         });
         
-        eventBus.on(EVENTS.DATA_CHANGED, () => {
-            this.render();
-        });
+        eventBus.on(EVENTS.DATA_CHANGED, () => this.render());
     }
 
     render() {
@@ -85,7 +73,7 @@ class App {
         const pageContent = currentPage ? currentPage.render() : '<div>Page not found</div>';
         
         root.innerHTML = `
-            <div style="display:flex;height:100vh;overflow:hidden">
+            <div style="display:flex">
                 ${Sidebar.render()}
                 <div class="main-content">
                     ${Topbar.render()}
@@ -97,10 +85,7 @@ class App {
             </div>
         `;
         
-        // Trigger page-specific initialization
-        if (currentPage && currentPage.onShow) {
-            currentPage.onShow();
-        }
+        if (currentPage && currentPage.onShow) currentPage.onShow();
     }
 }
 

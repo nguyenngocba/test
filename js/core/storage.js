@@ -1,47 +1,12 @@
-const STORAGE_KEY = 'steeltrack_pro_v10';
+const KEY = 'steeltrack_pro_v11';
 
 class Storage {
-    save(data) {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-            return true;
-        } catch (e) {
-            console.error('Storage save error:', e);
-            return false;
-        }
-    }
-
-    load() {
-        try {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            return saved ? JSON.parse(saved) : null;
-        } catch (e) {
-            console.error('Storage load error:', e);
-            return null;
-        }
-    }
-
-    getUser() {
-        try {
-            const user = localStorage.getItem('steeltrack_current_user');
-            return user ? JSON.parse(user) : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    setUser(user) {
-        localStorage.setItem('steeltrack_current_user', JSON.stringify(user));
-    }
-
-    clearUser() {
-        localStorage.removeItem('steeltrack_current_user');
-    }
-
-    clear() {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem('steeltrack_current_user');
-    }
+    save(data) { try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch(e) { return false; } }
+    load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch(e) { return null; } }
+    getUser() { try { const u = localStorage.getItem('steeltrack_user'); return u ? JSON.parse(u) : null; } catch(e) { return null; } }
+    setUser(u) { localStorage.setItem('steeltrack_user', JSON.stringify(u)); }
+    clearUser() { localStorage.removeItem('steeltrack_user'); }
+    clear() { localStorage.removeItem(KEY); localStorage.removeItem('steeltrack_user'); }
 }
 
 export const storage = new Storage();
