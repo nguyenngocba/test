@@ -1,1 +1,0 @@
-function formatMoney(v){ return (v||0).toLocaleString('vi-VN')+' đ'; }
