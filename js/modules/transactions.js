@@ -1,5 +1,5 @@
 import { state, saveState, addLog, formatMoney, showModal, closeModal, genTid, matById, projectById, supplierById, hasPermission } from './state.js';
-
+import { handleMoneyInput, handleQuantityInput, getMoneyValue, setMoneyInputValue } from './utils.js';
 let currentInvoiceBase64 = null;
 
 export function openPurchaseModal() {
