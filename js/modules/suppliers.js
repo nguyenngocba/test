@@ -1,119 +1,144 @@
-import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genSid, supplierById, hasPermission } from './state.js';
+import { state, saveData, addLog, formatMoney, escapeHtml, setSupplierFilter } from './state.js';
+import { showModal } from './auth.js';
 
+export function getSuppliers() {
+    return state.suppliers;
+}
+
+// ========== THÊM HÀM LỌC NHÀ CUNG CẤP ==========
+export function getFilteredSuppliers() {
+    const keyword = state.filters.supplier.keyword || '';
+    if (!keyword) return [...state.suppliers];
+    
+    const kw = keyword.toLowerCase();
+    return state.suppliers.filter(s => 
+        s.name.toLowerCase().includes(kw) || 
+        s.id.toLowerCase().includes(kw) ||
+        (s.phone && s.phone.includes(kw))
+    );
+}
+
+export function addSupplier(data) {
+    const newId = `S${String(state.nextId.supplier++).padStart(3, '0')}`;
+    const newSup = {
+        id: newId,
+        name: data.name,
+        phone: data.phone || '',
+        address: data.address || ''
+    };
+    state.suppliers.push(newSup);
+    addLog('Thêm nhà cung cấp', `${newSup.name}`);
+    saveData();
+    if (window.renderApp) window.renderApp();
+    return newSup;
+}
+
+export function deleteSupplier(id) {
+    const sup = state.suppliers.find(s => s.id === id);
+    if (!sup) return false;
+    
+    const relatedTx = state.transactions.filter(t => t.supplierId === id);
+    if (relatedTx.length > 0) {
+        if (!confirm(`Nhà cung cấp này có ${relatedTx.length} giao dịch. Xóa sẽ mất dữ liệu. Tiếp tục?`)) {
+            return false;
+        }
+        state.transactions = state.transactions.filter(t => t.supplierId !== id);
+    }
+    
+    state.suppliers = state.suppliers.filter(s => s.id !== id);
+    addLog('Xóa nhà cung cấp', `${sup.name}`);
+    saveData();
+    if (window.renderApp) window.renderApp();
+    return true;
+}
+
+// ========== SỬA LẠI RENDER CÓ TÌM KIẾM ==========
 export function renderSuppliers() {
-  const searchTerm = state.filters.supplierSearch?.toLowerCase() || '';
-  const filteredSuppliers = state.data.suppliers.filter(s => s.name.toLowerCase().includes(searchTerm));
-  
-  return `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP</div>
-    <div class="search-box"><input type="text" id="supplier-search" placeholder="🔍 Tìm kiếm nhà cung cấp..." value="${escapeHtml(state.filters.supplierSearch || '')}" onkeyup="filterSuppliers()"><button class="sm" onclick="clearSupplierSearch()">✖️ Xóa</button></div>
-    <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
-      ${filteredSuppliers.map(s => {
-        const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
-        const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
-        return `<div class="supplier-card">
-          <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
-          <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
-          <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
-          <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
-          <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
-          <div style="margin-top:8px;display:flex;gap:8px">
-            <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
-            <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
-            <button class="sm" onclick="viewSupplierHistory('${s.id}')">📜 Lịch sử</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div id="supplier-history-modal" style="display:none"></div>
-  </div>`;
+    const filtered = getFilteredSuppliers();
+    const keyword = state.filters.supplier.keyword || '';
+    
+    if (state.suppliers.length === 0) {
+        return '<div class="card">📭 Chưa có nhà cung cấp nào</div>';
+    }
+    
+    return `
+        <div class="card">
+            <div class="sec-title">🔍 TÌM KIẾM NHÀ CUNG CẤP</div>
+            <div class="search-box">
+                <input type="text" id="supplier-search" placeholder="🔍 Tìm theo tên, mã hoặc số điện thoại..." 
+                       value="${escapeHtml(keyword)}" style="flex:1">
+                <button id="clear-supplier-search" class="sm">✖️ Xóa</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
+            ${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy nhà cung cấp phù hợp</div>' : `
+                <div class="tbl-wrap">
+                    <table style="min-width:600px">
+                        <thead>
+                            <tr><th>Mã</th><th>Tên</th><th>Số điện thoại</th><th>Địa chỉ</th><th>Tổng nhập</th><th>Thao tác</th></tr>
+                        </thead>
+                        <tbody>
+                            ${filtered.map(s => {
+                                const total = state.transactions.filter(t => t.supplierId === s.id).reduce((sum, t) => sum + (t.total || 0), 0);
+                                return `
+                                    <tr>
+                                        <td>${s.id}</td>
+                                        <td><strong>${escapeHtml(s.name)}</strong></td>
+                                        <td>${s.phone || '—'}</td>
+                                        <td>${s.address || '—'}</td>
+                                        <td>${formatMoney(total)}</td>
+                                        <td><button class="sm danger" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `}
+        </div>
+    `;
 }
 
-export function openSupplierModal(supplier = null) {
-  if (!hasPermission('canManageSupplier')) { alert('Bạn không có quyền quản lý nhà cung cấp'); return; }
-  const isEdit = !!supplier;
-  showModal(`<div class="modal-hd"><span class="modal-title">${isEdit ? '✏️ Sửa nhà cung cấp' : '➕ Thêm nhà cung cấp mới'}</span><button class="xbtn" onclick="closeModal()">✕</button></div>
-    <div class="modal-bd">
-      <div class="form-group"><label class="form-label">Tên nhà cung cấp *</label><input id="sup-name" value="${supplier ? escapeHtml(supplier.name) : ''}" placeholder="VD: Công ty Thép ABC"></div>
-      <div class="form-group"><label class="form-label">Số điện thoại</label><input id="sup-phone" value="${supplier ? escapeHtml(supplier.phone || '') : ''}" placeholder="VD: 0912 345 678"></div>
-      <div class="form-group"><label class="form-label">Email</label><input id="sup-email" value="${supplier ? escapeHtml(supplier.email || '') : ''}" placeholder="VD: contact@thepabc.com"></div>
-      <div class="form-group"><label class="form-label">Địa chỉ</label><input id="sup-address" value="${supplier ? escapeHtml(supplier.address || '') : ''}" placeholder="VD: Hà Nội"></div>
-    </div>
-    <div class="modal-ft"><button onclick="closeModal()">Hủy</button><button class="primary" onclick="${isEdit ? `updateSupplier('${supplier.id}')` : 'saveSupplier()'}">${isEdit ? 'Cập nhật' : 'Lưu'}</button></div>`);
+// ========== BIND SỰ KIỆN TÌM KIẾM ==========
+export function bindSupplierSearchEvents() {
+    const searchInput = document.getElementById('supplier-search');
+    const clearBtn = document.getElementById('clear-supplier-search');
+    
+    const updateSearch = () => {
+        setSupplierFilter(searchInput?.value || '');
+        if (window.renderApp) window.renderApp();
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    };
+    
+    if (searchInput) searchInput.oninput = updateSearch;
+    if (clearBtn) clearBtn.onclick = () => {
+        setSupplierFilter('');
+        if (window.renderApp) window.renderApp();
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    };
 }
 
-export function saveSupplier() {
-  const name = document.getElementById('sup-name')?.value.trim();
-  if (!name) return alert('Vui lòng nhập tên nhà cung cấp');
-  const newSupplier = {
-    id: genSid(),
-    name: name,
-    phone: document.getElementById('sup-phone')?.value || '',
-    email: document.getElementById('sup-email')?.value || '',
-    address: document.getElementById('sup-address')?.value || ''
-  };
-  state.data.suppliers.push(newSupplier);
-  addLog('Thêm nhà cung cấp', `Đã thêm nhà cung cấp: ${name} (${newSupplier.id})`);
-  saveState(); closeModal(); if(window.render) window.render();
-}
-
-export function updateSupplier(sid) {
-  const supplier = supplierById(sid);
-  if (!supplier) return;
-  const name = document.getElementById('sup-name')?.value.trim();
-  if (!name) return alert('Vui lòng nhập tên nhà cung cấp');
-  supplier.name = name;
-  supplier.phone = document.getElementById('sup-phone')?.value || '';
-  supplier.email = document.getElementById('sup-email')?.value || '';
-  supplier.address = document.getElementById('sup-address')?.value || '';
-  addLog('Cập nhật nhà cung cấp', `Đã cập nhật thông tin nhà cung cấp: ${name} (${sid})`);
-  saveState(); closeModal(); if(window.render) window.render();
-}
-
-export function deleteSupplier(sid) {
-  if (!hasPermission('canManageSupplier')) { alert('Bạn không có quyền xóa nhà cung cấp'); return; }
-  const supplier = supplierById(sid);
-  if (!supplier) return;
-  const relatedTxns = state.data.transactions.filter(t => t.supplierId === sid);
-  if (relatedTxns.length > 0) {
-    if (!confirm(`⚠️ Nhà cung cấp "${supplier.name}" đã có ${relatedTxns.length} giao dịch nhập hàng.\nXóa sẽ XÓA LUÔN các giao dịch này.\nBạn có chắc chắn?`)) return;
-  } else {
-    if (!confirm(`Xóa nhà cung cấp "${supplier.name}"?`)) return;
-  }
-  state.data.suppliers = state.data.suppliers.filter(s => s.id !== sid);
-  state.data.transactions = state.data.transactions.filter(t => t.supplierId !== sid);
-  addLog('Xóa nhà cung cấp', `Đã xóa nhà cung cấp: ${supplier.name} (${sid})`);
-  saveState(); if(window.render) window.render();
-}
-
-export function filterSuppliers() {
-  state.filters.supplierSearch = document.getElementById('supplier-search')?.value || '';
-  if(window.render) window.render();
-}
-
-export function clearSupplierSearch() {
-  state.filters.supplierSearch = '';
-  if(window.render) window.render();
-}
-
-export function viewSupplierHistory(sid) {
-  const supplier = supplierById(sid);
-  const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === sid).sort((a,b) => new Date(b.date) - new Date(a.date));
-  const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
-  
-  showModal(`<div class="modal-hd"><span class="modal-title">📜 Lịch sử nhập hàng - ${escapeHtml(supplier?.name)}</span><button class="xbtn" onclick="closeModal()">✕</button></div>
-    <div class="modal-bd">
-      <div class="metric-card" style="margin-bottom:16px"><div class="metric-label">Tổng chi</div><div class="metric-val" style="font-size:20px">${formatMoney(totalSpent)}</div></div>
-      <div class="tbl-wrap"><table style="min-width:500px"><thead><tr><th>Ngày</th><th>Vật tư</th><th>SL</th><th>Đơn giá</th><th>VAT</th><th>Thành tiền</th></tr></thead>
-      <tbody>${purchaseTxns.map(t => {
-        const mat = state.data.materials.find(m => m.id === t.mid);
-        return `<tr>
-          <td>${t.date}</td><td>${mat?.name || 'N/A'}</td><td>${t.qty} ${mat?.unit || ''}</td>
-          <td>${formatMoney(t.unitPrice)}</td><td>${t.vatRate || 0}%</td>
-          <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
-        </table>`;
-      }).join('') || '<tr><td colspan="6">Chưa có giao dịch nào</td></tr>'}</tbody></table></div>
-      ${purchaseTxns.filter(t => t.invoiceImage).length > 0 ? `<div class="sec-title" style="margin-top:16px">📎 Hóa đơn đính kèm</div>
-      ${purchaseTxns.filter(t => t.invoiceImage).map(t => `<div><a href="${t.invoiceImage}" target="_blank">📄 Xem hóa đơn ngày ${t.date}</a></div>`).join('')}` : ''}
-    </div>
-    <div class="modal-ft"><button onclick="closeModal()">Đóng</button></div>`);
+export function showAddSupplierModal() {
+    showModal('🏭 Thêm nhà cung cấp mới', `
+        <div class="form-group">
+            <label>Tên nhà cung cấp *</label>
+            <input id="sup-name" placeholder="VD: Công ty Thép ABC">
+        </div>
+        <div class="form-group">
+            <label>Số điện thoại</label>
+            <input id="sup-phone" placeholder="VD: 0912 345 678">
+        </div>
+        <div class="form-group">
+            <label>Địa chỉ</label>
+            <input id="sup-address" placeholder="VD: Hà Nội">
+        </div>
+    `, () => {
+        addSupplier({
+            name: document.getElementById('sup-name').value,
+            phone: document.getElementById('sup-phone').value,
+            address: document.getElementById('sup-address').value
+        });
+    });
 }
