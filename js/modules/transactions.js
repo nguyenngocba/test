@@ -249,6 +249,3 @@ export function saveExport() {
   closeModal(); 
   if(window.render) window.render();
 }
-
-// Export để sử dụng
-export { handleIntegerInput, handleDecimalInput, getRawInteger, getRawDecimal };

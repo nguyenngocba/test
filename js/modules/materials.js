@@ -37,7 +37,7 @@ function updateMaterialList() {
     }
     
     materialListContainer.innerHTML = `
-        <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
+        <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></td></thead>
         <tbody>${filtered.map(m => `<tr>
             <td style="font-family:mono">${m.id}</td>
             <td><strong>${escapeHtml(m.name)}</strong></td>
@@ -91,7 +91,6 @@ function bindMaterialSearchEvents() {
         updateMaterialList();
     };
     
-    // Format số cho ô tìm kiếm min/max
     if (minInput) {
         minInput.addEventListener('input', handleIntegerInput);
         minInput.addEventListener('input', updateFilters);

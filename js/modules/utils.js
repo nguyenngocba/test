@@ -132,7 +132,6 @@ export function getRawDecimal(inputElement) {
 export function setFormattedValue(inputElement, value) {
     if (!inputElement) return;
     const num = Number(value) || 0;
-    // Kiểm tra nếu là số nguyên thì format không có phần thập phân
     if (Number.isInteger(num)) {
         inputElement.value = num.toLocaleString('vi-VN');
     } else {
