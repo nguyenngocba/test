@@ -2,11 +2,74 @@ import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModa
 
 // ========== FILTER CÔNG TRÌNH ==========
 let projectSearchKeyword = '';
+let projectListContainer = null;
 
 function getFilteredProjects() {
     if (!projectSearchKeyword) return [...state.data.projects];
     const kw = projectSearchKeyword.toLowerCase();
     return state.data.projects.filter(p => p.name.toLowerCase().includes(kw) || p.id.toLowerCase().includes(kw));
+}
+
+function updateProjectList() {
+    if (!projectListContainer) return;
+    const filtered = getFilteredProjects();
+    
+    const projectStats = filtered.map(p => {
+        const txnList = state.data.transactions.filter(t => t.projectId === p.id && t.type === 'usage');
+        const totalCost = txnList.reduce((s, t) => s + (t.totalAmount || 0), 0);
+        const items = txnList.length;
+        const percent = p.budget > 0 ? (totalCost / p.budget) * 100 : 0;
+        return { ...p, totalCost, items, percent };
+    });
+    
+    if (filtered.length === 0) {
+        projectListContainer.innerHTML = '<div class="metric-sub">📭 Không tìm thấy công trình phù hợp</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>';
+        return;
+    }
+    
+    projectListContainer.innerHTML = `
+        <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
+            ${projectStats.map(p => `<div class="metric-card">
+                <div style="display:flex;justify-content:space-between;align-items:center"><div class="metric-label">🏗️ ${escapeHtml(p.name)}</div><div class="tag">${p.items} lượt xuất</div></div>
+                <div class="metric-val" style="font-size:20px;margin:8px 0">${formatMoney(p.totalCost)}</div>
+                <div class="metric-sub">💰 Ngân sách: ${formatMoney(p.budget)}</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, p.percent)}%;background:${p.percent > 90 ? '#A32D2D' : '#378ADD'}"></div></div>
+                <div class="metric-sub" style="margin-top:6px">${p.percent.toFixed(1)}% ngân sách đã sử dụng</div>
+                ${hasPermission('canDeleteProject') ? `<button class="sm danger-btn" style="margin-top:12px" onclick="deleteProject('${p.id}')">🗑️ Xóa công trình</button>` : ''}
+            </div>`).join('')}
+        </div>
+        <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
+        <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
+        <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
+        <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!projectSearchKeyword || projectById(t.projectId)?.name.toLowerCase().includes(projectSearchKeyword.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
+            const mat = state.data.materials.find(m => m.id === t.mid);
+            const proj = projectById(t.projectId);
+            return `<tr>
+                <td><strong>${proj?.name || 'N/A'}</strong></td>
+                <td>${mat?.name || 'N/A'}</td>
+                <td>${t.qty} ${mat?.unit || ''}</td>
+                <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
+                <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
+                <td>${t.date}</td>
+            </tr>`;
+        }).join('') || '</tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
+    `;
+    
+    // Vẽ lại biểu đồ
+    setTimeout(() => {
+        const ctx = document.getElementById('ch-project-cost');
+        if (ctx && window.Chart) {
+            if (window.projectChart) window.projectChart.destroy();
+            window.projectChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: projectStats.map(p => p.name),
+                    datasets: [{ label: 'Chi phí đã sử dụng (VNĐ)', data: projectStats.map(p => p.totalCost), backgroundColor: '#378ADD', borderRadius: 6 }]
+                },
+                options: { maintainAspectRatio: false, responsive: true }
+            });
+        }
+    }, 100);
 }
 
 function renderProjectSearchBar() {
@@ -28,15 +91,14 @@ function bindProjectSearchEvents() {
     
     const handleSearch = () => {
         projectSearchKeyword = searchInput?.value || '';
-        if (window.render) window.render();
-        setTimeout(() => bindProjectSearchEvents(), 50);
+        updateProjectList(); // Chỉ cập nhật danh sách, không render lại toàn bộ
     };
     
     if (searchInput) searchInput.oninput = handleSearch;
     if (clearBtn) clearBtn.onclick = () => {
         projectSearchKeyword = '';
-        if (window.render) window.render();
-        setTimeout(() => bindProjectSearchEvents(), 50);
+        if (searchInput) searchInput.value = '';
+        updateProjectList();
     };
 }
 
@@ -54,34 +116,52 @@ export function renderProjects() {
   
   const result = renderProjectSearchBar() + `<div class="card">
     <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH (${filtered.length})</div>
-    <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
-      ${projectStats.map(p => `<div class="metric-card">
-        <div style="display:flex;justify-content:space-between;align-items:center"><div class="metric-label">🏗️ ${escapeHtml(p.name)}</div><div class="tag">${p.items} lượt xuất</div></div>
-        <div class="metric-val" style="font-size:20px;margin:8px 0">${formatMoney(p.totalCost)}</div>
-        <div class="metric-sub">💰 Ngân sách: ${formatMoney(p.budget)}</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, p.percent)}%;background:${p.percent > 90 ? '#A32D2D' : '#378ADD'}"></div></div>
-        <div class="metric-sub" style="margin-top:6px">${p.percent.toFixed(1)}% ngân sách đã sử dụng</div>
-        ${hasPermission('canDeleteProject') ? `<button class="sm danger-btn" style="margin-top:12px" onclick="deleteProject('${p.id}')">🗑️ Xóa công trình</button>` : ''}
-      </div>`).join('')}
+    <div id="project-list-container">
+        <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
+            ${projectStats.map(p => `<div class="metric-card">
+                <div style="display:flex;justify-content:space-between;align-items:center"><div class="metric-label">🏗️ ${escapeHtml(p.name)}</div><div class="tag">${p.items} lượt xuất</div></div>
+                <div class="metric-val" style="font-size:20px;margin:8px 0">${formatMoney(p.totalCost)}</div>
+                <div class="metric-sub">💰 Ngân sách: ${formatMoney(p.budget)}</div>
+                <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, p.percent)}%;background:${p.percent > 90 ? '#A32D2D' : '#378ADD'}"></div></div>
+                <div class="metric-sub" style="margin-top:6px">${p.percent.toFixed(1)}% ngân sách đã sử dụng</div>
+                ${hasPermission('canDeleteProject') ? `<button class="sm danger-btn" style="margin-top:12px" onclick="deleteProject('${p.id}')">🗑️ Xóa công trình</button>` : ''}
+            </div>`).join('')}
+        </div>
+        <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
+        <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
+        <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
+        <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!projectSearchKeyword || projectById(t.projectId)?.name.toLowerCase().includes(projectSearchKeyword.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
+            const mat = state.data.materials.find(m => m.id === t.mid);
+            const proj = projectById(t.projectId);
+            return `<tr>
+                <td><strong>${proj?.name || 'N/A'}</strong></td>
+                <td>${mat?.name || 'N/A'}</td>
+                <td>${t.qty} ${mat?.unit || ''}</td>
+                <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
+                <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
+                <td>${t.date}</td>
+            </tr>`;
+        }).join('') || '<tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
     </div>
-    <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
-    <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
-    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
-    <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!projectSearchKeyword || projectById(t.projectId)?.name.toLowerCase().includes(projectSearchKeyword.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
-      const mat = state.data.materials.find(m => m.id === t.mid);
-      const proj = projectById(t.projectId);
-      return `<tr>
-        <td><strong>${proj?.name || 'N/A'}</strong></td>
-        <td>${mat?.name || 'N/A'}</td>
-        <td>${t.qty} ${mat?.unit || ''}</td>
-        <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
-        <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
-        <td>${t.date}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
   </div>`;
   
-  setTimeout(() => bindProjectSearchEvents(), 50);
+  setTimeout(() => {
+      bindProjectSearchEvents();
+      projectListContainer = document.getElementById('project-list-container');
+      // Vẽ biểu đồ
+      const ctx = document.getElementById('ch-project-cost');
+      if (ctx && window.Chart) {
+          if (window.projectChart) window.projectChart.destroy();
+          window.projectChart = new Chart(ctx, {
+              type: 'bar',
+              data: {
+                  labels: projectStats.map(p => p.name),
+                  datasets: [{ label: 'Chi phí đã sử dụng (VNĐ)', data: projectStats.map(p => p.totalCost), backgroundColor: '#378ADD', borderRadius: 6 }]
+              },
+              options: { maintainAspectRatio: false, responsive: true }
+          });
+      }
+  }, 50);
   return result;
 }
 
@@ -121,6 +201,5 @@ export function deleteProject(pid) {
   saveState(); if(window.render) window.render();
 }
 
-// Hàm giữ để tương thích
 export function filterProjects() {}
 export function clearProjectSearch() {}
