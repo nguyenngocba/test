@@ -1,87 +1,107 @@
-import { state, saveState, loadState, applyTheme, hasPermission, addLog, formatMoney, escapeHtml, showModal, closeModal, genMid, genTid, genPid, genSid, matById, projectById, supplierById } from './modules/state.js';
-import { renderLogin, login, logout, switchPane, renderSidebar, renderTopbar, getPaneTitle } from './modules/auth.js';
-import { renderEntry, openMatModal, editMaterial, updateMaterial, deleteMaterial, saveMat } from './modules/materials.js';
-import { renderProjects, openProjectModal, saveProject, deleteProject, filterProjects, clearProjectSearch } from './modules/projects.js';
-import { renderSuppliers, openSupplierModal, saveSupplier, updateSupplier, deleteSupplier, filterSuppliers, clearSupplierSearch, viewSupplierHistory } from './modules/suppliers.js';
-import { openPurchaseModal, savePurchase, openTxnModal, saveExport, calculatePurchaseTotal, calculateExportTotal } from './modules/transactions.js';
+import { state, loadData, addLog, formatMoney } from './modules/state.js';
+import { renderLogin, renderSidebar, renderTopbar, switchPane, setCurrentUser, getCurrentUser } from './modules/auth.js';
+import { renderMaterials, addMaterial, updateMaterial, deleteMaterial, getMaterials, bindMaterialSearchEvents } from './modules/materials.js';
+import { renderProjects, addProject, deleteProject, getProjects, bindProjectSearchEvents } from './modules/projects.js';
+import { renderSuppliers, addSupplier, deleteSupplier, getSuppliers, bindSupplierSearchEvents } from './modules/suppliers.js';
+import { importMaterial, exportMaterial, getTransactions, bindImportEvents, bindExportEvents } from './modules/transactions.js';
 import { renderLogs } from './modules/logs.js';
-import { renderDashboard, renderCharts, renderProjectCharts } from './modules/charts.js';
-import { renderSettings, addCategory, addUnit, toggleTheme, addUser, deleteUser, changePassword, toggleUserPermission } from './modules/settings.js';
+import { renderDashboard } from './modules/charts.js';
 import { exportToExcel } from './modules/export.js';
 
-// Make functions global for inline onclick handlers
-window.login = login;
-window.logout = logout;
-window.switchPane = switchPane;
-window.openMatModal = openMatModal;
-window.editMaterial = editMaterial;
-window.updateMaterial = updateMaterial;
-window.deleteMaterial = deleteMaterial;
-window.saveMat = saveMat;
-window.openProjectModal = openProjectModal;
-window.saveProject = saveProject;
-window.deleteProject = deleteProject;
-window.filterProjects = filterProjects;
-window.clearProjectSearch = clearProjectSearch;
-window.openSupplierModal = openSupplierModal;
-window.saveSupplier = saveSupplier;
-window.updateSupplier = updateSupplier;
-window.deleteSupplier = deleteSupplier;
-window.filterSuppliers = filterSuppliers;
-window.clearSupplierSearch = clearSupplierSearch;
-window.viewSupplierHistory = viewSupplierHistory;
-window.openPurchaseModal = openPurchaseModal;
-window.savePurchase = savePurchase;
-window.openTxnModal = openTxnModal;
-window.saveExport = saveExport;
-window.calculatePurchaseTotal = calculatePurchaseTotal;
-window.calculateExportTotal = calculateExportTotal;
-window.addCategory = addCategory;
-window.addUnit = addUnit;
-window.toggleTheme = toggleTheme;
-window.addUser = addUser;
-window.deleteUser = deleteUser;
-window.changePassword = changePassword;
-window.toggleUserPermission = toggleUserPermission;
-window.exportToExcel = exportToExcel;
-window.closeModal = closeModal;
+// Khởi tạo dữ liệu
+loadData();
 
-// Expose state and utils for debugging
-window.debug = { state, saveState, addLog };
-
-// Initialize
-loadState();
-
-// Kiểm tra XLSX sau khi load
-setTimeout(() => {
-    if (typeof XLSX !== 'undefined') {
-        console.log('✅ Thư viện XLSX đã sẵn sàng');
-    } else {
-        console.warn('⚠️ Thư viện XLSX chưa được tải, export Excel sẽ không hoạt động');
-    }
-}, 1000);
-
-window.render = () => {
+// Hàm render chính
+function render() {
     const root = document.getElementById('root');
-    if (!state.currentUser) {
+    const currentUser = getCurrentUser();
+    
+    if (!currentUser) {
         root.innerHTML = renderLogin();
         return;
     }
-    root.innerHTML = `<div style="display:flex;height:100vh;overflow:hidden">
-        ${renderSidebar()}
-        <div class="main-content">
-            ${renderTopbar()}
-            <div class="pane ${state.currentPane === 'entry' ? 'active' : ''}" id="pane-entry">${renderEntry()}</div>
-            <div class="pane ${state.currentPane === 'dashboard' ? 'active' : ''}" id="pane-dashboard">${renderDashboard()}</div>
-            <div class="pane ${state.currentPane === 'projects' ? 'active' : ''}" id="pane-projects">${renderProjects()}</div>
-            <div class="pane ${state.currentPane === 'suppliers' ? 'active' : ''}" id="pane-suppliers">${renderSuppliers()}</div>
-            <div class="pane ${state.currentPane === 'logs' ? 'active' : ''}" id="pane-logs">${renderLogs()}</div>
-            <div class="pane ${state.currentPane === 'settings' ? 'active' : ''}" id="pane-settings">${renderSettings()}</div>
-            <div id="modal-area"></div>
+    
+    const currentPane = state.currentPane;
+    
+    root.innerHTML = `
+        <div style="display:flex">
+            ${renderSidebar()}
+            <div class="main-content">
+                ${renderTopbar()}
+                <div id="pane-entry" class="pane ${currentPane === 'entry' ? 'active' : ''}">${renderMaterials()}</div>
+                <div id="pane-dashboard" class="pane ${currentPane === 'dashboard' ? 'active' : ''}">${renderDashboard()}</div>
+                <div id="pane-projects" class="pane ${currentPane === 'projects' ? 'active' : ''}">${renderProjects()}</div>
+                <div id="pane-suppliers" class="pane ${currentPane === 'suppliers' ? 'active' : ''}">${renderSuppliers()}</div>
+                <div id="pane-logs" class="pane ${currentPane === 'logs' ? 'active' : ''}">${renderLogs()}</div>
+            </div>
         </div>
-    </div>`;
-    if (state.currentPane === 'dashboard') setTimeout(renderCharts, 50);
-    if (state.currentPane === 'projects') setTimeout(renderProjectCharts, 50);
+        <div id="modal-area"></div>
+    `;
+    
+    // Bind sự kiện tìm kiếm sau khi render
+    if (currentPane === 'entry') {
+        setTimeout(() => bindMaterialSearchEvents(), 50);
+    } else if (currentPane === 'projects') {
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    } else if (currentPane === 'suppliers') {
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    }
+    
+    // Bind sự kiện cho modal import/export
+    bindImportEvents();
+    bindExportEvents();
+    
+    // Vẽ biểu đồ nếu đang ở dashboard
+    if (currentPane === 'dashboard') {
+        setTimeout(() => {
+            import('./modules/charts.js').then(m => m.renderDashboardChart());
+        }, 100);
+    }
+}
+
+// Global functions cho inline onclick
+window.switchPane = switchPane;
+window.addMaterial = addMaterial;
+window.updateMaterial = updateMaterial;
+window.deleteMaterial = deleteMaterial;
+window.addProject = addProject;
+window.deleteProject = deleteProject;
+window.addSupplier = addSupplier;
+window.deleteSupplier = deleteSupplier;
+window.importMaterial = importMaterial;
+window.exportMaterial = exportMaterial;
+window.exportToExcel = exportToExcel;
+
+// Export các hàm modal
+window.showAddMaterialModal = () => import('./modules/materials.js').then(m => m.showAddMaterialModal());
+window.showImportModal = () => import('./modules/transactions.js').then(t => t.showImportModal());
+window.showExportModal = () => import('./modules/transactions.js').then(t => t.showExportModal());
+window.showAddProjectModal = () => import('./modules/projects.js').then(p => p.showAddProjectModal());
+window.showAddSupplierModal = () => import('./modules/suppliers.js').then(s => s.showAddSupplierModal());
+window.editMaterial = (id) => import('./modules/materials.js').then(m => m.editMaterial(id));
+
+// Đăng nhập/đăng xuất
+window.login = (userId) => {
+    const users = [
+        { id: 'u1', name: 'Admin', role: 'admin' },
+        { id: 'u2', name: 'Nhân viên kho', role: 'user' }
+    ];
+    const user = users.find(u => u.id === userId);
+    if (user) {
+        setCurrentUser(user);
+        addLog('Đăng nhập', `${user.name}`);
+        render();
+    }
 };
 
-window.render();
+window.logout = () => {
+    addLog('Đăng xuất', getCurrentUser()?.name);
+    setCurrentUser(null);
+    render();
+};
+
+// Gán render toàn cục
+window.renderApp = render;
+
+// Khởi chạy
+render();

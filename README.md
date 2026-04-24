@@ -1,4 +1,4 @@
-# SteelTrack Pro - Hệ thống quản lý kho thép
+# SteelTrack Pro - Hệ thống quản lý kho thép & Công trình & Nhà cung cấp
 
 ## Mô tả
 Hệ thống quản lý kho thép chuyên nghiệp với các tính năng:
@@ -18,16 +18,9 @@ Hệ thống quản lý kho thép chuyên nghiệp với các tính năng:
 - SheetJS (XLSX) cho xuất Excel
 - LocalStorage cho lưu trữ dữ liệu
 
-## Cấu trúc thư mục
-steeltrack/
-├── index.html
-├── css/
-│ └── style.css
-├── js/
-│ ├── main.js
-│ ├── core/ # Core modules (app, state, eventBus, router, storage)
-│ ├── models/ # Data models (Material, Project, Supplier, Transaction)
-│ ├── services/ # Business logic services
-│ ├── views/ # UI components (pages, layouts, components)
-│ └── utils/ # Utilities (formatters, constants)
-└── README.md
+## Cài đặt và chạy
+
+### Cách 1: Chạy trực tiếp (không cần server)
+```bash
+# Mở file index.html bằng trình duyệt
+# Hoặc dùng Live Server trong VS Code

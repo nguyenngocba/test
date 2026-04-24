@@ -1,89 +1,142 @@
-import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genPid, projectById, hasPermission } from './state.js';
+import { state, saveData, addLog, formatMoney, escapeHtml, setProjectFilter } from './state.js';
+import { showModal } from './auth.js';
+
+export function getProjects() {
+    return state.projects;
+}
+
+export function getFilteredProjects() {
+    const keyword = state.filters.project.keyword || '';
+    if (!keyword) return [...state.projects];
+    
+    const kw = keyword.toLowerCase();
+    return state.projects.filter(p => 
+        p.name.toLowerCase().includes(kw) || 
+        p.id.toLowerCase().includes(kw)
+    );
+}
+
+export function addProject(data) {
+    const newId = `P${String(state.nextId.project++).padStart(3, '0')}`;
+    const newProj = {
+        id: newId,
+        name: data.name,
+        budget: Number(data.budget) || 0,
+        spent: 0
+    };
+    state.projects.push(newProj);
+    addLog('Thêm công trình', `${newProj.name} - Ngân sách: ${formatMoney(newProj.budget)}`);
+    saveData();
+    if (window.renderApp) window.renderApp();
+    return newProj;
+}
+
+export function deleteProject(id) {
+    const proj = state.projects.find(p => p.id === id);
+    if (!proj) return false;
+    
+    const relatedTx = state.transactions.filter(t => t.projectId === id);
+    if (relatedTx.length > 0) {
+        if (!confirm(`Công trình này có ${relatedTx.length} giao dịch. Xóa sẽ mất dữ liệu. Tiếp tục?`)) {
+            return false;
+        }
+        state.transactions = state.transactions.filter(t => t.projectId !== id);
+    }
+    
+    state.projects = state.projects.filter(p => p.id !== id);
+    addLog('Xóa công trình', `${proj.name}`);
+    saveData();
+    if (window.renderApp) window.renderApp();
+    return true;
+}
 
 export function renderProjects() {
-  const searchTerm = state.filters.projectSearch?.toLowerCase() || '';
-  const filteredProjects = state.data.projects.filter(p => p.name.toLowerCase().includes(searchTerm));
-  
-  const projectStats = filteredProjects.map(p => {
-    const txnList = state.data.transactions.filter(t => t.projectId === p.id && t.type === 'usage');
-    const totalCost = txnList.reduce((s, t) => s + (t.totalAmount || 0), 0);
-    const items = txnList.length;
-    const percent = p.budget > 0 ? (totalCost / p.budget) * 100 : 0;
-    return { ...p, totalCost, items, percent };
-  });
-  
-  return `<div class="card">
-    <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH</div>
-    <div class="search-box"><input type="text" id="project-search" placeholder="🔍 Tìm kiếm công trình..." value="${escapeHtml(state.filters.projectSearch || '')}" onkeyup="filterProjects()"><button class="sm" onclick="clearProjectSearch()">✖️ Xóa</button></div>
-    <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
-      ${projectStats.map(p => `<div class="metric-card">
-        <div style="display:flex;justify-content:space-between;align-items:center"><div class="metric-label">🏗️ ${escapeHtml(p.name)}</div><div class="tag">${p.items} lượt xuất</div></div>
-        <div class="metric-val" style="font-size:20px;margin:8px 0">${formatMoney(p.totalCost)}</div>
-        <div class="metric-sub">💰 Ngân sách: ${formatMoney(p.budget)}</div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, p.percent)}%;background:${p.percent > 90 ? '#A32D2D' : '#378ADD'}"></div></div>
-        <div class="metric-sub" style="margin-top:6px">${p.percent.toFixed(1)}% ngân sách đã sử dụng</div>
-        ${hasPermission('canDeleteProject') ? `<button class="sm danger-btn" style="margin-top:12px" onclick="deleteProject('${p.id}')">🗑️ Xóa công trình</button>` : ''}
-      </div>`).join('')}
-    </div>
-    <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
-    <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
-    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
-    <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!state.filters.projectSearch || projectById(t.projectId)?.name.toLowerCase().includes(state.filters.projectSearch.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
-      const mat = state.data.materials.find(m => m.id === t.mid);
-      const proj = projectById(t.projectId);
-      return `<tr>
-        <td><strong>${proj?.name || 'N/A'}</strong></td>
-        <td>${mat?.name || 'N/A'}</td>
-        <td>${t.qty} ${mat?.unit || ''}</td>
-        <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
-        <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
-        <td>${t.date}</td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
-  </div>`;
+    const filtered = getFilteredProjects();
+    const keyword = state.filters.project.keyword || '';
+    
+    if (state.projects.length === 0) {
+        return '<div class="card">📭 Chưa có công trình nào</div>';
+    }
+    
+    return `
+        <div class="card">
+            <div class="sec-title">🔍 TÌM KIẾM CÔNG TRÌNH</div>
+            <div class="search-box">
+                <input type="text" id="project-search" placeholder="🔍 Tìm theo tên hoặc mã công trình..." 
+                       value="${escapeHtml(keyword)}" style="flex:1">
+                <button id="clear-project-search" class="sm">✖️ Xóa</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH (${filtered.length})</div>
+            ${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy công trình phù hợp</div>' : `
+                <div class="tbl-wrap">
+                    <table style="min-width:700px">
+                        <thead>
+                            <tr><th>Mã</th><th>Tên công trình</th><th>Ngân sách</th><th>Đã chi</th><th>Còn lại</th><th>%</th><th>Thao tác</th></tr>
+                        </thead>
+                        <tbody>
+                            ${filtered.map(p => {
+                                const spent = state.transactions.filter(t => t.projectId === p.id).reduce((s, t) => s + (t.total || 0), 0);
+                                const percent = p.budget > 0 ? (spent / p.budget) * 100 : 0;
+                                return `
+                                    <tr>
+                                        <td>${p.id}</td>
+                                        <td><strong>${escapeHtml(p.name)}</strong></td>
+                                        <td>${formatMoney(p.budget)}</td>
+                                        <td>${formatMoney(spent)}</td>
+                                        <td>${formatMoney(p.budget - spent)}</td>
+                                        <td>
+                                            <div style="width:80px;background:var(--surface2);border-radius:10px;overflow:hidden">
+                                                <div style="width:${Math.min(100, percent)}%;height:6px;background:var(--accent)"></div>
+                                            </div>
+                                            ${percent.toFixed(0)}%
+                                        </td>
+                                        <td><button class="sm danger" onclick="deleteProject('${p.id}')">🗑️ Xóa</button></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `}
+        </div>
+    `;
 }
 
-export function openProjectModal() {
-  if (!hasPermission('canCreateMaterial')) { alert('Bạn không có quyền thêm công trình'); return; }
-  showModal(`<div class="modal-hd"><span class="modal-title">🏗️ Thêm công trình mới</span><button class="xbtn" onclick="closeModal()">✕</button></div>
-    <div class="modal-bd"><div class="form-group"><label class="form-label">Tên công trình</label><input id="proj-name" placeholder="VD: Cầu vượt X"></div>
-    <div class="form-group"><label class="form-label">Ngân sách dự kiến (VNĐ)</label><input id="proj-budget" type="number" value="0"></div></div>
-    <div class="modal-ft"><button onclick="closeModal()">Hủy</button><button class="primary" onclick="saveProject()">Tạo công trình</button></div>`);
+export function bindProjectSearchEvents() {
+    const searchInput = document.getElementById('project-search');
+    const clearBtn = document.getElementById('clear-project-search');
+    
+    const updateSearch = () => {
+        setProjectFilter(searchInput?.value || '');
+        if (window.renderApp) window.renderApp();
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    };
+    
+    if (searchInput) searchInput.oninput = updateSearch;
+    if (clearBtn) clearBtn.onclick = () => {
+        setProjectFilter('');
+        if (window.renderApp) window.renderApp();
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    };
 }
 
-export function saveProject() {
-  const name = document.getElementById('proj-name')?.value.trim();
-  if(!name) return alert('Nhập tên công trình');
-  const newProj = {
-    id: genPid(), name, budget: parseFloat(document.getElementById('proj-budget').value) || 0, spent: 0
-  };
-  state.data.projects.push(newProj);
-  addLog('Thêm công trình', `Đã thêm công trình: ${name} (${newProj.id}) - Ngân sách: ${formatMoney(newProj.budget)}`);
-  saveState(); closeModal(); if(window.render) window.render();
-}
-
-export function deleteProject(pid) {
-  if (!hasPermission('canDeleteProject')) { alert('Bạn không có quyền xóa công trình'); return; }
-  const project = projectById(pid);
-  if (!project) return;
-  const relatedTxns = state.data.transactions.filter(t => t.projectId === pid && t.type === 'usage');
-  if (relatedTxns.length > 0) {
-    if (!confirm(`⚠️ Công trình "${project.name}" đã có ${relatedTxns.length} giao dịch xuất vật tư.\nXóa công trình sẽ XÓA LUÔN các giao dịch này.\nBạn có chắc chắn?`)) return;
-  } else {
-    if (!confirm(`Xóa công trình "${project.name}"?`)) return;
-  }
-  state.data.projects = state.data.projects.filter(p => p.id !== pid);
-  state.data.transactions = state.data.transactions.filter(t => t.projectId !== pid);
-  addLog('Xóa công trình', `Đã xóa công trình: ${project.name} (${pid})`);
-  saveState(); if(window.render) window.render();
-}
-
-export function filterProjects() {
-  state.filters.projectSearch = document.getElementById('project-search')?.value || '';
-  if(window.render) window.render();
-}
-
-export function clearProjectSearch() {
-  state.filters.projectSearch = '';
-  if(window.render) window.render();
+export function showAddProjectModal() {
+    showModal('🏗️ Thêm công trình mới', `
+        <div class="form-group">
+            <label>Tên công trình</label>
+            <input id="proj-name" placeholder="VD: Cầu vượt X">
+        </div>
+        <div class="form-group">
+            <label>Ngân sách (VNĐ)</label>
+            <input id="proj-budget" type="number" value="0">
+        </div>
+    `, () => {
+        addProject({
+            name: document.getElementById('proj-name').value,
+            budget: document.getElementById('proj-budget').value
+        });
+    });
 }
