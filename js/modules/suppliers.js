@@ -1,17 +1,47 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genSid, supplierById, hasPermission } from './state.js';
 
-// ========== FILTER NHÀ CUNG CẤP ==========
-let supplierSearchKeyword = '';
+// ========== FILTER NHÀ CUNG CẤP NÂNG CAO ==========
+let supplierFilters = { keyword: '', phone: '', minPurchase: '', maxPurchase: '' };
 let supplierListContainer = null;
 
 function getFilteredSuppliers() {
-    if (!supplierSearchKeyword) return [...state.data.suppliers];
-    const kw = supplierSearchKeyword.toLowerCase();
-    return state.data.suppliers.filter(s => 
-        s.name.toLowerCase().includes(kw) || 
-        s.id.toLowerCase().includes(kw) ||
-        (s.phone && s.phone.includes(kw))
-    );
+    let result = [...state.data.suppliers];
+    const f = supplierFilters;
+    
+    // Lọc theo từ khóa (tên hoặc mã)
+    if (f.keyword) {
+        const kw = f.keyword.toLowerCase();
+        result = result.filter(s => s.name.toLowerCase().includes(kw) || s.id.toLowerCase().includes(kw));
+    }
+    
+    // Lọc theo số điện thoại
+    if (f.phone) {
+        result = result.filter(s => s.phone && s.phone.includes(f.phone));
+    }
+    
+    // Lọc theo tổng chi tiêu tối thiểu
+    if (f.minPurchase !== '' && f.minPurchase !== null && f.minPurchase !== undefined) {
+        const min = Number(f.minPurchase);
+        if (!isNaN(min)) {
+            result = result.filter(s => {
+                const total = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id).reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                return total >= min;
+            });
+        }
+    }
+    
+    // Lọc theo tổng chi tiêu tối đa
+    if (f.maxPurchase !== '' && f.maxPurchase !== null && f.maxPurchase !== undefined) {
+        const max = Number(f.maxPurchase);
+        if (!isNaN(max)) {
+            result = result.filter(s => {
+                const total = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id).reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                return total <= max;
+            });
+        }
+    }
+    
+    return result;
 }
 
 function updateSupplierList() {
@@ -28,12 +58,17 @@ function updateSupplierList() {
             ${filtered.map(s => {
                 const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
                 const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                const purchaseCount = purchaseTxns.length;
                 return `<div class="supplier-card">
-                    <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <strong>${escapeHtml(s.name)}</strong> 
+                        <span class="tag">${s.id}</span>
+                    </div>
                     <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
                     <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
                     <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
-                    <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
+                    <div class="metric-sub" style="margin-top:8px">📦 Số lần nhập: ${purchaseCount}</div>
+                    <div class="metric-sub" style="color:var(--success-text)">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
                     <div style="margin-top:8px;display:flex;gap:8px">
                         <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
                         <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
@@ -48,29 +83,47 @@ function updateSupplierList() {
 function renderSupplierSearchBar() {
     return `
         <div class="card" style="margin-bottom: 16px;">
-            <div class="sec-title">🔍 TÌM KIẾM NHÀ CUNG CẤP</div>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="sup-search" placeholder="Tên, mã hoặc số điện thoại..." 
-                       value="${escapeHtml(supplierSearchKeyword)}" style="flex: 1;">
-                <button id="sup-clear-search" class="sm">✖️ Xóa</button>
+            <div class="sec-title">🔍 TÌM KIẾM NÂNG CAO - NHÀ CUNG CẤP</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                <input type="text" id="sup-search-keyword" placeholder="Tên hoặc mã..." 
+                       value="${escapeHtml(supplierFilters.keyword)}" style="flex: 2; min-width: 180px;">
+                <input type="text" id="sup-search-phone" placeholder="Số điện thoại..." 
+                       value="${escapeHtml(supplierFilters.phone)}" style="width: 140px;">
+                <input type="number" id="sup-search-min" placeholder="Tổng chi ≥" 
+                       value="${supplierFilters.minPurchase || ''}" style="width: 130px;">
+                <input type="number" id="sup-search-max" placeholder="Tổng chi ≤" 
+                       value="${supplierFilters.maxPurchase || ''}" style="width: 130px;">
+                <button id="sup-clear-filters" class="sm">🗑️ Xóa bộ lọc</button>
             </div>
         </div>
     `;
 }
 
 function bindSupplierSearchEvents() {
-    const searchInput = document.getElementById('sup-search');
-    const clearBtn = document.getElementById('sup-clear-search');
+    const keywordInput = document.getElementById('sup-search-keyword');
+    const phoneInput = document.getElementById('sup-search-phone');
+    const minInput = document.getElementById('sup-search-min');
+    const maxInput = document.getElementById('sup-search-max');
+    const clearBtn = document.getElementById('sup-clear-filters');
     
-    const handleSearch = () => {
-        supplierSearchKeyword = searchInput?.value || '';
-        updateSupplierList(); // Chỉ cập nhật danh sách, không render lại toàn bộ
+    const updateFilters = () => {
+        supplierFilters.keyword = keywordInput?.value || '';
+        supplierFilters.phone = phoneInput?.value || '';
+        supplierFilters.minPurchase = minInput?.value || '';
+        supplierFilters.maxPurchase = maxInput?.value || '';
+        updateSupplierList();
     };
     
-    if (searchInput) searchInput.oninput = handleSearch;
+    if (keywordInput) keywordInput.oninput = updateFilters;
+    if (phoneInput) phoneInput.oninput = updateFilters;
+    if (minInput) minInput.oninput = updateFilters;
+    if (maxInput) maxInput.oninput = updateFilters;
     if (clearBtn) clearBtn.onclick = () => {
-        supplierSearchKeyword = '';
-        if (searchInput) searchInput.value = '';
+        supplierFilters = { keyword: '', phone: '', minPurchase: '', maxPurchase: '' };
+        if (keywordInput) keywordInput.value = '';
+        if (phoneInput) phoneInput.value = '';
+        if (minInput) minInput.value = '';
+        if (maxInput) maxInput.value = '';
         updateSupplierList();
     };
 }
@@ -86,12 +139,17 @@ export function renderSuppliers() {
             ${filtered.map(s => {
                 const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
                 const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                const purchaseCount = purchaseTxns.length;
                 return `<div class="supplier-card">
-                    <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <strong>${escapeHtml(s.name)}</strong> 
+                        <span class="tag">${s.id}</span>
+                    </div>
                     <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
                     <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
                     <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
-                    <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
+                    <div class="metric-sub" style="margin-top:8px">📦 Số lần nhập: ${purchaseCount}</div>
+                    <div class="metric-sub" style="color:var(--success-text)">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
                     <div style="margin-top:8px;display:flex;gap:8px">
                         <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
                         <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
