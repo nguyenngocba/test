@@ -1,6 +1,6 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genPid, projectById, hasPermission } from './state.js';
 
-// ========== SỬA FILTER DÙNG BIẾN CỤC BỘ ==========
+// ========== FILTER CÔNG TRÌNH ==========
 let projectSearchKeyword = '';
 
 function getFilteredProjects() {
@@ -40,7 +40,7 @@ function bindProjectSearchEvents() {
     };
 }
 
-// ========== SỬA LẠI HÀM renderProjects ==========
+// ========== RENDER CHÍNH ==========
 export function renderProjects() {
   const filtered = getFilteredProjects();
   
@@ -52,7 +52,7 @@ export function renderProjects() {
     return { ...p, totalCost, items, percent };
   });
   
-  return renderProjectSearchBar() + `<div class="card">
+  const result = renderProjectSearchBar() + `<div class="card">
     <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH (${filtered.length})</div>
     <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
       ${projectStats.map(p => `<div class="metric-card">
@@ -66,7 +66,7 @@ export function renderProjects() {
     </div>
     <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
     <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
-    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></table></thead>
+    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
     <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!projectSearchKeyword || projectById(t.projectId)?.name.toLowerCase().includes(projectSearchKeyword.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
       const mat = state.data.materials.find(m => m.id === t.mid);
       const proj = projectById(t.projectId);
@@ -77,12 +77,12 @@ export function renderProjects() {
         <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
         <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
         <td>${t.date}</td>
-      </table>`;
+      </tr>`;
     }).join('') || '<tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
   </div>`;
   
-  // Gán sự kiện tìm kiếm sau khi render
   setTimeout(() => bindProjectSearchEvents(), 50);
+  return result;
 }
 
 // Các hàm khác giữ nguyên
@@ -121,11 +121,6 @@ export function deleteProject(pid) {
   saveState(); if(window.render) window.render();
 }
 
-// Giữ lại các hàm filter cũ để tương thích (có thể bỏ nếu không dùng)
-export function filterProjects() {
-  // Đã thay bằng bindProjectSearchEvents
-}
-
-export function clearProjectSearch() {
-  // Đã thay bằng bindProjectSearchEvents
-}
+// Hàm giữ để tương thích
+export function filterProjects() {}
+export function clearProjectSearch() {}

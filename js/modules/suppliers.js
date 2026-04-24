@@ -1,6 +1,6 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genSid, supplierById, hasPermission } from './state.js';
 
-// ========== SỬA FILTER DÙNG BIẾN CỤC BỘ ==========
+// ========== FILTER NHÀ CUNG CẤP ==========
 let supplierSearchKeyword = '';
 
 function getFilteredSuppliers() {
@@ -44,11 +44,11 @@ function bindSupplierSearchEvents() {
     };
 }
 
-// ========== SỬA LẠI HÀM renderSuppliers ==========
+// ========== RENDER CHÍNH ==========
 export function renderSuppliers() {
   const filtered = getFilteredSuppliers();
   
-  return renderSupplierSearchBar() + `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
+  const result = renderSupplierSearchBar() + `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
     <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
       ${filtered.map(s => {
         const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
@@ -70,8 +70,8 @@ export function renderSuppliers() {
     <div id="supplier-history-modal" style="display:none"></div>
   </div>`;
   
-  // Gán sự kiện tìm kiếm sau khi render
   setTimeout(() => bindSupplierSearchEvents(), 50);
+  return result;
 }
 
 // Các hàm khác giữ nguyên
@@ -132,7 +132,7 @@ export function deleteSupplier(sid) {
   saveState(); if(window.render) window.render();
 }
 
-// Giữ lại các hàm filter cũ để tương thích
+// Hàm giữ để tương thích
 export function filterSuppliers() {}
 export function clearSupplierSearch() {}
 

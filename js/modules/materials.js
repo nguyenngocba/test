@@ -1,6 +1,6 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genMid, matById, hasPermission } from './state.js';
 
-// ========== THÊM FILTER CHO VẬT TƯ ==========
+// ========== FILTER VẬT TƯ ==========
 let materialFilters = { keyword: '', category: '', minStock: '', maxStock: '' };
 
 function getFilteredMaterials() {
@@ -14,11 +14,11 @@ function getFilteredMaterials() {
     if (f.category && f.category !== 'all') {
         result = result.filter(m => m.cat === f.category);
     }
-    if (f.minStock !== '' && f.minStock !== null) {
+    if (f.minStock !== '' && f.minStock !== null && f.minStock !== undefined) {
         const min = Number(f.minStock);
         if (!isNaN(min)) result = result.filter(m => m.qty >= min);
     }
-    if (f.maxStock !== '' && f.maxStock !== null) {
+    if (f.maxStock !== '' && f.maxStock !== null && f.maxStock !== undefined) {
         const max = Number(f.maxStock);
         if (!isNaN(max)) result = result.filter(m => m.qty <= max);
     }
@@ -73,13 +73,12 @@ function bindMaterialSearchEvents() {
     };
 }
 
-// ========== SỬA LẠI HÀM renderEntry ==========
+// ========== RENDER CHÍNH ==========
 export function renderEntry() {
   if (state.data.materials.length === 0) return `<div class="card">📭 Chưa có vật tư nào. Hãy thêm mới.</div>`;
   
   const filtered = getFilteredMaterials();
-  
-  return renderMaterialSearchBar() + `<div class="card"><div class="sec-title">📋 DANH SÁCH VẬT TƯ TỒN KHO (${filtered.length} sản phẩm)</div>
+  const result = renderMaterialSearchBar() + `<div class="card"><div class="sec-title">📋 DANH SÁCH VẬT TƯ TỒN KHO (${filtered.length} sản phẩm)</div>
     ${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy vật tư phù hợp</div>' : `
     <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
     <tbody>${filtered.map(m => `<tr>
@@ -98,8 +97,8 @@ export function renderEntry() {
     </tr>`).join('')}</tbody></table></div>`}
   </div>`;
   
-  // Gán sự kiện tìm kiếm sau khi render
   setTimeout(() => bindMaterialSearchEvents(), 50);
+  return result;
 }
 
 // Các hàm khác giữ nguyên
