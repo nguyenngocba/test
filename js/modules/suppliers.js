@@ -5,56 +5,6 @@ export function getSuppliers() {
     return state.suppliers;
 }
 
-// ========== TÌM KIẾM NHÀ CUNG CẤP ==========
-let supplierSearchKeyword = '';
-
-export function getFilteredSuppliers() {
-    if (!supplierSearchKeyword) return [...state.suppliers];
-    const kw = supplierSearchKeyword.toLowerCase();
-    return state.suppliers.filter(s => 
-        s.name.toLowerCase().includes(kw) || 
-        s.id.toLowerCase().includes(kw) ||
-        (s.phone && s.phone.includes(kw))
-    );
-}
-
-export function setSupplierSearch(keyword) {
-    supplierSearchKeyword = keyword;
-    if (window.renderApp) window.renderApp();
-}
-
-export function renderSupplierSearchBar() {
-    return `
-        <div class="card" style="margin-bottom: 16px;">
-            <div class="sec-title">🔍 TÌM KIẾM NHÀ CUNG CẤP</div>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="sup-search" placeholder="Tên, mã hoặc số điện thoại..." 
-                       value="${escapeHtml(supplierSearchKeyword)}" style="flex: 1;">
-                <button id="sup-clear-search" class="sm">✖️ Xóa</button>
-            </div>
-        </div>
-    `;
-}
-
-export function bindSupplierSearchEvents() {
-    const searchInput = document.getElementById('sup-search');
-    const clearBtn = document.getElementById('sup-clear-search');
-    
-    const handleSearch = () => {
-        supplierSearchKeyword = searchInput?.value || '';
-        if (window.renderApp) window.renderApp();
-        setTimeout(() => bindSupplierSearchEvents(), 50);
-    };
-    
-    if (searchInput) searchInput.oninput = handleSearch;
-    if (clearBtn) clearBtn.onclick = () => {
-        supplierSearchKeyword = '';
-        if (window.renderApp) window.renderApp();
-        setTimeout(() => bindSupplierSearchEvents(), 50);
-    };
-}
-
-// ========== CÁC HÀM XỬ LÝ CHÍNH ==========
 export function addSupplier(data) {
     const newId = `S${String(state.nextId.supplier++).padStart(3, '0')}`;
     const newSup = {
@@ -89,46 +39,40 @@ export function deleteSupplier(id) {
     return true;
 }
 
-// ========== RENDER DANH SÁCH ==========
 export function renderSuppliers() {
-    const filtered = getFilteredSuppliers();
-    
     if (state.suppliers.length === 0) {
         return '<div class="card">📭 Chưa có nhà cung cấp nào</div>';
     }
     
-    return renderSupplierSearchBar() + `
+    return `
         <div class="card">
-            <div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
-            ${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy nhà cung cấp phù hợp</div>' : `
-                <div class="tbl-wrap">
-                    <table style="min-width:600px">
-                        <thead>
-                            <tr><th>Mã</th><th>Tên</th><th>Số điện thoại</th><th>Địa chỉ</th><th>Tổng nhập</th><th>Thao tác</th></tr>
-                        </thead>
-                        <tbody>
-                            ${filtered.map(s => {
-                                const total = state.transactions.filter(t => t.supplierId === s.id).reduce((sum, t) => sum + (t.total || 0), 0);
-                                return `
-                                    <tr>
-                                        <td>${s.id}</td>
-                                        <td><strong>${escapeHtml(s.name)}</strong></td>
-                                        <td>${s.phone || '—'}</td>
-                                        <td>${s.address || '—'}</td>
-                                        <td>${formatMoney(total)}</td>
-                                        <td><button class="sm danger" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button></td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `}
+            <div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP</div>
+            <div class="tbl-wrap">
+                <table style="min-width:600px">
+                    <thead>
+                        <tr><th>Mã</th><th>Tên</th><th>Số điện thoại</th><th>Địa chỉ</th><th>Tổng nhập</th><th>Thao tác</th></tr>
+                    </thead>
+                    <tbody>
+                        ${state.suppliers.map(s => {
+                            const total = state.transactions.filter(t => t.supplierId === s.id).reduce((sum, t) => sum + (t.total || 0), 0);
+                            return `
+                                <tr>
+                                    <td>${s.id}</td>
+                                    <td><strong>${escapeHtml(s.name)}</strong></td>
+                                    <td>${s.phone || '—'}</td>
+                                    <td>${s.address || '—'}</td>
+                                    <td>${formatMoney(total)}</td>
+                                    <td><button class="sm danger" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button></td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
 }
 
-// ========== MODAL ==========
 export function showAddSupplierModal() {
     showModal('🏭 Thêm nhà cung cấp mới', `
         <div class="form-group">
