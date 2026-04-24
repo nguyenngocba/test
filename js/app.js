@@ -1,8 +1,8 @@
 import { state, loadData, addLog, formatMoney } from './modules/state.js';
 import { renderLogin, renderSidebar, renderTopbar, switchPane, setCurrentUser, getCurrentUser } from './modules/auth.js';
-import { renderMaterials, addMaterial, updateMaterial, deleteMaterial, getMaterials } from './modules/materials.js';
-import { renderProjects, addProject, deleteProject, getProjects } from './modules/projects.js';
-import { renderSuppliers, addSupplier, deleteSupplier, getSuppliers } from './modules/suppliers.js';
+import { renderMaterials, addMaterial, updateMaterial, deleteMaterial, getMaterials, bindMaterialSearchEvents } from './modules/materials.js';
+import { renderProjects, addProject, deleteProject, getProjects, bindProjectSearchEvents } from './modules/projects.js';
+import { renderSuppliers, addSupplier, deleteSupplier, getSuppliers, bindSupplierSearchEvents } from './modules/suppliers.js';
 import { importMaterial, exportMaterial, getTransactions } from './modules/transactions.js';
 import { renderLogs } from './modules/logs.js';
 import { renderDashboard } from './modules/charts.js';
@@ -37,6 +37,15 @@ function render() {
         </div>
         <div id="modal-area"></div>
     `;
+    
+    // Bind sự kiện tìm kiếm sau khi render
+    if (currentPane === 'entry') {
+        setTimeout(() => bindMaterialSearchEvents(), 50);
+    } else if (currentPane === 'projects') {
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    } else if (currentPane === 'suppliers') {
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    }
     
     // Vẽ biểu đồ nếu đang ở dashboard
     if (currentPane === 'dashboard') {
