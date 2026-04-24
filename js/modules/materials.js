@@ -2,6 +2,7 @@ import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModa
 
 // ========== FILTER VẬT TƯ ==========
 let materialFilters = { keyword: '', category: '', minStock: '', maxStock: '' };
+let materialListContainer = null;
 
 function getFilteredMaterials() {
     let result = [...state.data.materials];
@@ -23,6 +24,34 @@ function getFilteredMaterials() {
         if (!isNaN(max)) result = result.filter(m => m.qty <= max);
     }
     return result;
+}
+
+function updateMaterialList() {
+    if (!materialListContainer) return;
+    const filtered = getFilteredMaterials();
+    
+    if (filtered.length === 0) {
+        materialListContainer.innerHTML = '<div class="metric-sub">📭 Không tìm thấy vật tư phù hợp</div>';
+        return;
+    }
+    
+    materialListContainer.innerHTML = `
+        <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
+        <tbody>${filtered.map(m => `<tr>
+            <td style="font-family:mono">${m.id}</td>
+            <td><strong>${escapeHtml(m.name)}</strong></td>
+            <td>${m.cat}</td>
+            <td>${m.unit}</td>
+            <td style="font-weight:500">${m.qty.toLocaleString()}</td>
+            <td>${formatMoney(m.cost)}</td>
+            <td><span class="badge ${m.qty <= m.low ? 'b-low' : 'b-ok'}">${m.qty <= m.low ? '⚠️ Sắp hết' : '✅ OK'}</span></td>
+            <td style="max-width:150px;white-space:normal;word-break:break-word">${escapeHtml(m.note || '—')}</td>
+            <td>
+                ${hasPermission('canEditMaterial') ? `<button class="sm" onclick="editMaterial('${m.id}')">✏️ Sửa</button>` : ''}
+                ${hasPermission('canDeleteMaterial') ? `<button class="sm danger-btn" onclick="deleteMaterial('${m.id}')">🗑️ Xóa</button>` : ''}
+            </td>
+        </tr>`).join('')}</tbody></table></div>
+    `;
 }
 
 function renderMaterialSearchBar() {
@@ -58,8 +87,7 @@ function bindMaterialSearchEvents() {
         materialFilters.category = categorySelect?.value || '';
         materialFilters.minStock = minInput?.value || '';
         materialFilters.maxStock = maxInput?.value || '';
-        if (window.render) window.render();
-        setTimeout(() => bindMaterialSearchEvents(), 50);
+        updateMaterialList(); // Chỉ cập nhật danh sách, không render lại toàn bộ
     };
     
     if (keywordInput) keywordInput.oninput = updateFilters;
@@ -68,8 +96,11 @@ function bindMaterialSearchEvents() {
     if (maxInput) maxInput.oninput = updateFilters;
     if (clearBtn) clearBtn.onclick = () => {
         materialFilters = { keyword: '', category: '', minStock: '', maxStock: '' };
-        if (window.render) window.render();
-        setTimeout(() => bindMaterialSearchEvents(), 50);
+        if (keywordInput) keywordInput.value = '';
+        if (categorySelect) categorySelect.value = 'all';
+        if (minInput) minInput.value = '';
+        if (maxInput) maxInput.value = '';
+        updateMaterialList();
     };
 }
 
@@ -78,26 +109,31 @@ export function renderEntry() {
   if (state.data.materials.length === 0) return `<div class="card">📭 Chưa có vật tư nào. Hãy thêm mới.</div>`;
   
   const filtered = getFilteredMaterials();
-  const result = renderMaterialSearchBar() + `<div class="card"><div class="sec-title">📋 DANH SÁCH VẬT TƯ TỒN KHO (${filtered.length} sản phẩm)</div>
-    ${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy vật tư phù hợp</div>' : `
-    <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
-    <tbody>${filtered.map(m => `<tr>
-      <td style="font-family:mono">${m.id}</td>
-      <td><strong>${escapeHtml(m.name)}</strong></td>
-      <td>${m.cat}</td>
-      <td>${m.unit}</td>
-      <td style="font-weight:500">${m.qty.toLocaleString()}</td>
-      <td>${formatMoney(m.cost)}</td>
-      <td><span class="badge ${m.qty <= m.low ? 'b-low' : 'b-ok'}">${m.qty <= m.low ? '⚠️ Sắp hết' : '✅ OK'}</span></td>
-      <td style="max-width:150px;white-space:normal;word-break:break-word">${escapeHtml(m.note || '—')}</td>
-      <td>
-        ${hasPermission('canEditMaterial') ? `<button class="sm" onclick="editMaterial('${m.id}')">✏️ Sửa</button>` : ''}
-        ${hasPermission('canDeleteMaterial') ? `<button class="sm danger-btn" onclick="deleteMaterial('${m.id}')">🗑️ Xóa</button>` : ''}
-      </td>
-    </tr>`).join('')}</tbody></table></div>`}
+  const result = renderMaterialSearchBar() + `<div class="card">
+    <div class="sec-title">📋 DANH SÁCH VẬT TƯ TỒN KHO (${filtered.length} sản phẩm)</div>
+    <div id="material-list-container">${filtered.length === 0 ? '<div class="metric-sub">📭 Không tìm thấy vật tư phù hợp</div>' : `
+        <div class="tbl-wrap"><table style="min-width:900px"><thead><tr><th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th><th>Tồn kho</th><th>Đơn giá gốc</th><th>TT</th><th>Ghi chú</th><th>Thao tác</th></tr></thead>
+        <tbody>${filtered.map(m => `<tr>
+            <td style="font-family:mono">${m.id}</td>
+            <td><strong>${escapeHtml(m.name)}</strong></td>
+            <td>${m.cat}</td>
+            <td>${m.unit}</td>
+            <td style="font-weight:500">${m.qty.toLocaleString()}</td>
+            <td>${formatMoney(m.cost)}</td>
+            <td><span class="badge ${m.qty <= m.low ? 'b-low' : 'b-ok'}">${m.qty <= m.low ? '⚠️ Sắp hết' : '✅ OK'}</span></td>
+            <td style="max-width:150px;white-space:normal;word-break:break-word">${escapeHtml(m.note || '—')}</td>
+            <td>
+                ${hasPermission('canEditMaterial') ? `<button class="sm" onclick="editMaterial('${m.id}')">✏️ Sửa</button>` : ''}
+                ${hasPermission('canDeleteMaterial') ? `<button class="sm danger-btn" onclick="deleteMaterial('${m.id}')">🗑️ Xóa</button>` : ''}
+            </td>
+        </tr>`).join('')}</tbody></table></div>
+    `}</div>
   </div>`;
   
-  setTimeout(() => bindMaterialSearchEvents(), 50);
+  setTimeout(() => {
+      bindMaterialSearchEvents();
+      materialListContainer = document.getElementById('material-list-container');
+  }, 50);
   return result;
 }
 
@@ -130,7 +166,8 @@ export function saveMat() {
   };
   state.data.materials.push(newMat);
   addLog('Thêm vật tư', `Đã thêm vật tư: ${name} (${newMat.id}) - SL: ${newMat.qty} ${newMat.unit} - Giá: ${formatMoney(newMat.cost)}`);
-  saveState(); closeModal(); if(window.render) window.render();
+  saveState(); closeModal(); 
+  if (window.render) window.render();
 }
 
 export function editMaterial(mid) {
