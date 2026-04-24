@@ -1,4 +1,4 @@
-// State quản lý dữ liệu
+// ==================== STATE ====================
 export let state = {
     currentUser: null,
     currentPane: 'entry',
@@ -9,10 +9,15 @@ export let state = {
     logs: [],
     categories: ['Dầm thép', 'Tấm thép', 'Thép hộp', 'Thép góc', 'Bu lông', 'Que hàn', 'Ống thép'],
     units: ['tấn', 'kg', 'cái', 'mét', 'thùng', 'bộ'],
-    nextId: { material: 1, project: 1, supplier: 1, transaction: 1 }
+    nextId: { material: 1, project: 1, supplier: 1, transaction: 1 },
+    filters: {
+        material: { keyword: '', category: '', minStock: '', maxStock: '' },
+        project: { keyword: '' },
+        supplier: { keyword: '' }
+    }
 };
 
-// EXPORT TẤT CẢ CÁC HÀM CẦN THIẾT
+// ==================== LƯU & TẢI DỮ LIỆU ====================
 export function saveData() {
     localStorage.setItem('steeltrack_data', JSON.stringify({
         materials: state.materials,
@@ -65,9 +70,18 @@ export function loadData() {
         state.nextId.supplier = 4;
     }
     
+    if (state.filters === undefined) {
+        state.filters = {
+            material: { keyword: '', category: '', minStock: '', maxStock: '' },
+            project: { keyword: '' },
+            supplier: { keyword: '' }
+        };
+    }
+    
     saveData();
 }
 
+// ==================== LOG ====================
 export function addLog(action, detail) {
     const user = state.currentUser;
     state.logs.unshift({
@@ -80,6 +94,7 @@ export function addLog(action, detail) {
     saveData();
 }
 
+// ==================== UTILS ====================
 export function formatMoney(v) {
     if (v === undefined || v === null) return '0₫';
     return v.toLocaleString('vi-VN') + '₫';
@@ -95,7 +110,7 @@ export function escapeHtml(str) {
     });
 }
 
-// ========== THÊM CÁC EXPORT CHO TÌM KIẾM (nếu cần) ==========
+// ==================== FILTERS (CHO TÌM KIẾM) ====================
 export function setMaterialFilter(key, value) {
     if (!state.filters) state.filters = { material: {}, project: {}, supplier: {} };
     if (!state.filters.material) state.filters.material = {};
@@ -116,6 +131,18 @@ export function setSupplierFilter(keyword) {
 }
 
 export function clearMaterialFilters() {
-    if (state.filters) state.filters.material = {};
+    if (state.filters) state.filters.material = { keyword: '', category: '', minStock: '', maxStock: '' };
     if (window.renderApp) window.renderApp();
+}
+
+export function getMaterialFilters() {
+    return state.filters?.material || { keyword: '', category: '', minStock: '', maxStock: '' };
+}
+
+export function getProjectFilter() {
+    return state.filters?.project?.keyword || '';
+}
+
+export function getSupplierFilter() {
+    return state.filters?.supplier?.keyword || '';
 }
