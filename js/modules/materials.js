@@ -1,4 +1,5 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genMid, matById, hasPermission } from './state.js';
+import { handleIntegerInput, getRawInteger, setFormattedValue } from './utils.js';
 
 // ========== FILTER VẬT TƯ ==========
 let materialFilters = { keyword: '', category: '', minStock: '', maxStock: '' };
@@ -65,10 +66,10 @@ function renderMaterialSearchBar() {
                 <select id="mat-search-category" style="flex: 1; min-width: 120px;">
                     ${categories.map(c => `<option value="${c}" ${materialFilters.category === c ? 'selected' : ''}>${c === 'all' ? '📂 Tất cả' : c}</option>`).join('')}
                 </select>
-                <input type="number" id="mat-search-min" placeholder="Tồn ≥" 
-                       value="${materialFilters.minStock || ''}" style="width: 100px;">
-                <input type="number" id="mat-search-max" placeholder="Tồn ≤" 
-                       value="${materialFilters.maxStock || ''}" style="width: 100px;">
+                <input type="text" id="mat-search-min" placeholder="Tồn ≥" 
+                       value="${materialFilters.minStock || ''}" style="width: 100px; text-align: right;">
+                <input type="text" id="mat-search-max" placeholder="Tồn ≤" 
+                       value="${materialFilters.maxStock || ''}" style="width: 100px; text-align: right;">
                 <button id="mat-clear-filters" class="sm">🗑️ Xóa</button>
             </div>
         </div>
@@ -85,15 +86,22 @@ function bindMaterialSearchEvents() {
     const updateFilters = () => {
         materialFilters.keyword = keywordInput?.value || '';
         materialFilters.category = categorySelect?.value || '';
-        materialFilters.minStock = minInput?.value || '';
-        materialFilters.maxStock = maxInput?.value || '';
-        updateMaterialList(); // Chỉ cập nhật danh sách, không render lại toàn bộ
+        materialFilters.minStock = minInput?.value.replace(/[^0-9]/g, '') || '';
+        materialFilters.maxStock = maxInput?.value.replace(/[^0-9]/g, '') || '';
+        updateMaterialList();
     };
     
+    // Format số cho ô tìm kiếm min/max
+    if (minInput) {
+        minInput.addEventListener('input', handleIntegerInput);
+        minInput.addEventListener('input', updateFilters);
+    }
+    if (maxInput) {
+        maxInput.addEventListener('input', handleIntegerInput);
+        maxInput.addEventListener('input', updateFilters);
+    }
     if (keywordInput) keywordInput.oninput = updateFilters;
     if (categorySelect) categorySelect.onchange = updateFilters;
-    if (minInput) minInput.oninput = updateFilters;
-    if (maxInput) maxInput.oninput = updateFilters;
     if (clearBtn) clearBtn.onclick = () => {
         materialFilters = { keyword: '', category: '', minStock: '', maxStock: '' };
         if (keywordInput) keywordInput.value = '';
@@ -137,7 +145,7 @@ export function renderEntry() {
   return result;
 }
 
-// Các hàm khác giữ nguyên
+// ========== THÊM VẬT TƯ ==========
 export function openMatModal() {
   if (!hasPermission('canCreateMaterial')) { alert('Bạn không có quyền thêm vật tư'); return; }
   showModal(`<div class="modal-hd"><span class="modal-title">➕ Thêm vật tư mới</span><button class="xbtn" onclick="closeModal()">✕</button></div>
@@ -145,45 +153,70 @@ export function openMatModal() {
       <div class="form-group form-full"><label class="form-label">Tên vật tư *</label><input id="mn-name" placeholder="VD: Thép tấm 12mm"></div>
       <div class="form-group"><label class="form-label">Danh mục</label><select id="mn-cat">${state.data.categories.map(c => `<option>${c}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Đơn vị tính</label><select id="mn-unit">${state.data.units.map(u => `<option>${u}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Số lượng nhập đầu</label><input id="mn-qty" type="number" value="0" step="any"></div>
-      <div class="form-group"><label class="form-label">Đơn giá (VNĐ)</label><input id="mn-cost" type="number" value="0"></div>
-      <div class="form-group"><label class="form-label">Ngưỡng cảnh báo tồn</label><input id="mn-low" type="number" value="5"></div>
+      <div class="form-group"><label class="form-label">Số lượng nhập đầu</label><input type="text" id="mn-qty" value="0" style="text-align: right;"></div>
+      <div class="form-group"><label class="form-label">Đơn giá (VNĐ)</label><input type="text" id="mn-cost" value="0" style="text-align: right;"></div>
+      <div class="form-group"><label class="form-label">Ngưỡng cảnh báo tồn</label><input type="text" id="mn-low" value="5" style="text-align: right;"></div>
       <div class="form-group form-full"><label class="form-label">Ghi chú</label><textarea id="mn-note" rows="2" placeholder="Ghi chú thêm về vật tư..."></textarea></div>
     </div></div>
     <div class="modal-ft"><button onclick="closeModal()">Hủy</button><button class="primary" onclick="saveMat()">Lưu vật tư</button></div>`);
+  
+  setTimeout(() => {
+      const qtyInput = document.getElementById('mn-qty');
+      const costInput = document.getElementById('mn-cost');
+      const lowInput = document.getElementById('mn-low');
+      
+      if (qtyInput) qtyInput.addEventListener('input', handleIntegerInput);
+      if (costInput) costInput.addEventListener('input', handleIntegerInput);
+      if (lowInput) lowInput.addEventListener('input', handleIntegerInput);
+  }, 100);
 }
 
 export function saveMat() {
   const name = document.getElementById('mn-name')?.value.trim();
   if(!name) return alert('Vui lòng nhập tên vật tư');
+  
+  const qtyInput = document.getElementById('mn-qty');
+  const costInput = document.getElementById('mn-cost');
+  const lowInput = document.getElementById('mn-low');
+  
   const newMat = {
-    id: genMid(), name, cat: document.getElementById('mn-cat').value,
+    id: genMid(), 
+    name, 
+    cat: document.getElementById('mn-cat').value,
     unit: document.getElementById('mn-unit').value,
-    qty: parseFloat(document.getElementById('mn-qty').value) || 0,
-    cost: parseFloat(document.getElementById('mn-cost').value) || 0,
-    low: parseFloat(document.getElementById('mn-low').value) || 5,
+    qty: parseFloat(qtyInput?.value.replace(/[^0-9.]/g, '')) || 0,
+    cost: parseInt(costInput?.value.replace(/[^0-9]/g, '')) || 0,
+    low: parseInt(lowInput?.value.replace(/[^0-9]/g, '')) || 5,
     note: document.getElementById('mn-note')?.value || ''
   };
   state.data.materials.push(newMat);
   addLog('Thêm vật tư', `Đã thêm vật tư: ${name} (${newMat.id}) - SL: ${newMat.qty} ${newMat.unit} - Giá: ${formatMoney(newMat.cost)}`);
-  saveState(); closeModal(); 
-  if (window.render) window.render();
+  saveState(); closeModal(); if(window.render) window.render();
 }
 
+// ========== SỬA VẬT TƯ ==========
 export function editMaterial(mid) {
   if (!hasPermission('canEditMaterial')) { alert('Bạn không có quyền sửa vật tư'); return; }
   const mat = matById(mid);
   if (!mat) return;
+  
   showModal(`<div class="modal-hd"><span class="modal-title">✏️ Sửa vật tư</span><button class="xbtn" onclick="closeModal()">✕</button></div>
     <div class="modal-bd"><div class="form-grid2">
       <div class="form-group form-full"><label class="form-label">Tên vật tư *</label><input id="mn-name" value="${escapeHtml(mat.name)}" placeholder="VD: Thép tấm 12mm"></div>
       <div class="form-group"><label class="form-label">Danh mục</label><select id="mn-cat">${state.data.categories.map(c => `<option ${mat.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Đơn vị tính</label><select id="mn-unit">${state.data.units.map(u => `<option ${mat.unit === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">Đơn giá (VNĐ)</label><input id="mn-cost" type="number" value="${mat.cost}"></div>
-      <div class="form-group"><label class="form-label">Ngưỡng cảnh báo tồn</label><input id="mn-low" type="number" value="${mat.low}"></div>
+      <div class="form-group"><label class="form-label">Đơn giá (VNĐ)</label><input type="text" id="mn-cost" value="${mat.cost.toLocaleString('vi-VN')}" style="text-align: right;"></div>
+      <div class="form-group"><label class="form-label">Ngưỡng cảnh báo tồn</label><input type="text" id="mn-low" value="${mat.low.toLocaleString('vi-VN')}" style="text-align: right;"></div>
       <div class="form-group form-full"><label class="form-label">Ghi chú</label><textarea id="mn-note" rows="2">${escapeHtml(mat.note || '')}</textarea></div>
     </div></div>
     <div class="modal-ft"><button onclick="closeModal()">Hủy</button><button class="primary" onclick="updateMaterial('${mid}')">Cập nhật</button></div>`);
+  
+  setTimeout(() => {
+      const costInput = document.getElementById('mn-cost');
+      const lowInput = document.getElementById('mn-low');
+      if (costInput) costInput.addEventListener('input', handleIntegerInput);
+      if (lowInput) lowInput.addEventListener('input', handleIntegerInput);
+  }, 100);
 }
 
 export function updateMaterial(mid) {
@@ -191,11 +224,15 @@ export function updateMaterial(mid) {
   if (!mat) return;
   const name = document.getElementById('mn-name')?.value.trim();
   if (!name) return alert('Vui lòng nhập tên vật tư');
+  
+  const costInput = document.getElementById('mn-cost');
+  const lowInput = document.getElementById('mn-low');
+  
   mat.name = name;
   mat.cat = document.getElementById('mn-cat').value;
   mat.unit = document.getElementById('mn-unit').value;
-  mat.cost = parseFloat(document.getElementById('mn-cost').value) || 0;
-  mat.low = parseFloat(document.getElementById('mn-low').value) || 5;
+  mat.cost = parseInt(costInput?.value.replace(/[^0-9]/g, '')) || 0;
+  mat.low = parseInt(lowInput?.value.replace(/[^0-9]/g, '')) || 5;
   mat.note = document.getElementById('mn-note')?.value || '';
   addLog('Sửa vật tư', `Đã cập nhật vật tư: ${name} (${mid})`);
   saveState(); closeModal(); if(window.render) window.render();

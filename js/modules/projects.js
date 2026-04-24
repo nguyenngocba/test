@@ -1,4 +1,5 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genPid, projectById, hasPermission } from './state.js';
+import { handleIntegerInput, getRawInteger, setFormattedValue } from './utils.js';
 
 // ========== FILTER CÔNG TRÌNH NÂNG CAO ==========
 let projectFilters = { keyword: '', budgetMin: '', budgetMax: '', status: '' };
@@ -241,40 +242,35 @@ export function renderProjects() {
 }
 
 // Các hàm khác giữ nguyên
+// ========== THÊM CÔNG TRÌNH ==========
 export function openProjectModal() {
   if (!hasPermission('canCreateMaterial')) { alert('Bạn không có quyền thêm công trình'); return; }
   showModal(`<div class="modal-hd"><span class="modal-title">🏗️ Thêm công trình mới</span><button class="xbtn" onclick="closeModal()">✕</button></div>
-    <div class="modal-bd"><div class="form-group"><label class="form-label">Tên công trình</label><input id="proj-name" placeholder="VD: Cầu vượt X"></div>
-    <div class="form-group"><label class="form-label">Ngân sách dự kiến (VNĐ)</label><input id="proj-budget" type="number" value="0"></div></div>
+    <div class="modal-bd">
+      <div class="form-group"><label class="form-label">Tên công trình</label><input id="proj-name" placeholder="VD: Cầu vượt X"></div>
+      <div class="form-group"><label class="form-label">Ngân sách dự kiến (VNĐ)</label><input type="text" id="proj-budget" value="0" style="text-align: right;"></div>
+    </div>
     <div class="modal-ft"><button onclick="closeModal()">Hủy</button><button class="primary" onclick="saveProject()">Tạo công trình</button></div>`);
+  
+  setTimeout(() => {
+      const budgetInput = document.getElementById('proj-budget');
+      if (budgetInput) budgetInput.addEventListener('input', handleIntegerInput);
+  }, 100);
 }
 
 export function saveProject() {
   const name = document.getElementById('proj-name')?.value.trim();
   if(!name) return alert('Nhập tên công trình');
+  
+  const budgetInput = document.getElementById('proj-budget');
+  const budget = parseInt(budgetInput?.value.replace(/[^0-9]/g, '')) || 0;
+  
   const newProj = {
-    id: genPid(), name, budget: parseFloat(document.getElementById('proj-budget').value) || 0, spent: 0
+    id: genPid(), name, budget: budget, spent: 0
   };
   state.data.projects.push(newProj);
   addLog('Thêm công trình', `Đã thêm công trình: ${name} (${newProj.id}) - Ngân sách: ${formatMoney(newProj.budget)}`);
   saveState(); closeModal(); if(window.render) window.render();
 }
-
-export function deleteProject(pid) {
-  if (!hasPermission('canDeleteProject')) { alert('Bạn không có quyền xóa công trình'); return; }
-  const project = projectById(pid);
-  if (!project) return;
-  const relatedTxns = state.data.transactions.filter(t => t.projectId === pid && t.type === 'usage');
-  if (relatedTxns.length > 0) {
-    if (!confirm(`⚠️ Công trình "${project.name}" đã có ${relatedTxns.length} giao dịch xuất vật tư.\nXóa công trình sẽ XÓA LUÔN các giao dịch này.\nBạn có chắc chắn?`)) return;
-  } else {
-    if (!confirm(`Xóa công trình "${project.name}"?`)) return;
-  }
-  state.data.projects = state.data.projects.filter(p => p.id !== pid);
-  state.data.transactions = state.data.transactions.filter(t => t.projectId !== pid);
-  addLog('Xóa công trình', `Đã xóa công trình: ${project.name} (${pid})`);
-  saveState(); if(window.render) window.render();
-}
-
 export function filterProjects() {}
 export function clearProjectSearch() {}

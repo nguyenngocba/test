@@ -70,49 +70,30 @@ export function getPaneTitle() {
   return titles[state.currentPane] || '';
 }
 
-// ========== THÊM CÁC HÀM FORMAT TIỀN REAL-TIME ==========
+// ========== HÀM FORMAT TIỀN REAL-TIME ==========
 
-// Xử lý sự kiện input cho ô số tiền - format ngay khi gõ
-export function handleMoneyInputRealTime(event) {
+// Xử lý sự kiện input cho ô số nguyên (tiền, số lượng nguyên)
+export function handleIntegerInput(event) {
     const input = event.target;
-    // Lưu vị trí con trỏ
-    const cursorPos = input.selectionStart;
-    
-    // Lấy giá trị số từ input (chỉ lấy số)
     let rawValue = input.value.replace(/[^0-9]/g, '');
-    
-    // Chuyển thành số
     let number = parseInt(rawValue) || 0;
-    
-    // Format có dấu chấm phân cách
     let formatted = number.toLocaleString('vi-VN');
-    
-    // Nếu giá trị thay đổi, cập nhật
     if (input.value !== formatted) {
         input.value = formatted;
-        // Đặt con trỏ về cuối
         input.setSelectionRange(input.value.length, input.value.length);
     }
-    
-    // Trigger sự kiện change để cập nhật preview
     const changeEvent = new Event('change', { bubbles: true });
     input.dispatchEvent(changeEvent);
 }
 
-// Xử lý sự kiện input cho số lượng (hỗ trợ số thập phân)
-export function handleQuantityInputRealTime(event) {
+// Xử lý sự kiện input cho số thập phân (số lượng có thể có .5)
+export function handleDecimalInput(event) {
     const input = event.target;
-    
-    // Lấy giá trị, chỉ giữ số và dấu chấm
     let value = input.value.replace(/[^0-9.]/g, '');
-    
-    // Xử lý nhiều dấu chấm
     const parts = value.split('.');
     if (parts.length > 2) {
         value = parts[0] + '.' + parts.slice(1).join('');
     }
-    
-    // Format phần nguyên
     if (parts[0]) {
         const integerPart = parseInt(parts[0]) || 0;
         const formattedInteger = integerPart.toLocaleString('vi-VN');
@@ -129,29 +110,57 @@ export function handleQuantityInputRealTime(event) {
             }
         }
     }
-    
-    // Trigger sự kiện change để cập nhật preview
     const changeEvent = new Event('change', { bubbles: true });
     input.dispatchEvent(changeEvent);
 }
 
-// Lấy giá trị số từ ô input đã format (bỏ dấu chấm)
-export function getRawNumber(inputElement) {
+// Lấy giá trị số nguyên từ ô đã format (bỏ dấu chấm)
+export function getRawInteger(inputElement) {
     if (!inputElement) return 0;
     const raw = inputElement.value.replace(/[^0-9]/g, '');
     return parseInt(raw) || 0;
 }
 
-// Lấy giá trị số thập phân từ ô input số lượng
-export function getRawQuantity(inputElement) {
+// Lấy giá trị số thập phân từ ô đã format
+export function getRawDecimal(inputElement) {
     if (!inputElement) return 0;
     const raw = inputElement.value.replace(/[^0-9.]/g, '');
     return parseFloat(raw) || 0;
 }
 
-// Set giá trị cho input tiền (có format)
-export function setMoneyValue(inputElement, value) {
+// Set giá trị cho ô input (tự động format)
+export function setFormattedValue(inputElement, value) {
     if (!inputElement) return;
     const num = Number(value) || 0;
-    inputElement.value = num.toLocaleString('vi-VN');
+    // Kiểm tra nếu là số nguyên thì format không có phần thập phân
+    if (Number.isInteger(num)) {
+        inputElement.value = num.toLocaleString('vi-VN');
+    } else {
+        const parts = num.toString().split('.');
+        const integerPart = parseInt(parts[0]) || 0;
+        const formattedInteger = integerPart.toLocaleString('vi-VN');
+        if (parts.length > 1 && parts[1]) {
+            inputElement.value = formattedInteger + '.' + parts[1];
+        } else {
+            inputElement.value = formattedInteger;
+        }
+    }
+}
+
+// Format số hiển thị (dùng cho preview)
+export function formatNumberRaw(value, isDecimal = false) {
+    if (value === undefined || value === null) return '0';
+    if (isDecimal) {
+        const num = parseFloat(value) || 0;
+        const parts = num.toString().split('.');
+        const integerPart = parseInt(parts[0]) || 0;
+        const formattedInteger = integerPart.toLocaleString('vi-VN');
+        if (parts.length > 1 && parts[1]) {
+            return formattedInteger + '.' + parts[1];
+        }
+        return formattedInteger;
+    } else {
+        const num = parseInt(value) || 0;
+        return num.toLocaleString('vi-VN');
+    }
 }

@@ -1,5 +1,5 @@
 import { state, saveState, addLog, formatMoney, showModal, closeModal, genTid, matById, projectById, supplierById, hasPermission } from './state.js';
-import { handleMoneyInputRealTime, handleQuantityInputRealTime, getRawNumber, getRawQuantity, setMoneyValue } from './utils.js';
+import { handleIntegerInput, handleDecimalInput, getRawInteger, getRawDecimal, setFormattedValue } from './utils.js';
 
 let currentInvoiceBase64 = null;
 
@@ -37,24 +37,23 @@ export function openPurchaseModal() {
     if (mat) {
       const priceInput = document.getElementById('purchase-price');
       if (priceInput && !priceInput.value) {
-        setMoneyValue(priceInput, mat.cost);
+        setFormattedValue(priceInput, mat.cost);
       }
     }
     calculatePurchaseTotal();
   };
   
-  // Gán sự kiện format real-time
   setTimeout(() => {
     const qtyInput = document.getElementById('purchase-qty');
     const priceInput = document.getElementById('purchase-price');
     const vatInput = document.getElementById('purchase-vat');
     
     if (qtyInput) {
-      qtyInput.addEventListener('input', handleQuantityInputRealTime);
+      qtyInput.addEventListener('input', handleDecimalInput);
       qtyInput.addEventListener('change', () => calculatePurchaseTotal());
     }
     if (priceInput) {
-      priceInput.addEventListener('input', handleMoneyInputRealTime);
+      priceInput.addEventListener('input', handleIntegerInput);
       priceInput.addEventListener('change', () => calculatePurchaseTotal());
     }
     if (vatInput) vatInput.addEventListener('input', () => calculatePurchaseTotal());
@@ -69,8 +68,8 @@ export function calculatePurchaseTotal() {
   const priceInput = document.getElementById('purchase-price');
   const vatInput = document.getElementById('purchase-vat');
   
-  const qty = getRawQuantity(qtyInput);
-  const price = getRawNumber(priceInput);
+  const qty = getRawDecimal(qtyInput);
+  const price = getRawInteger(priceInput);
   const vatRate = parseFloat(vatInput?.value) || 0;
   
   const subtotal = qty * price;
@@ -113,14 +112,14 @@ export function savePurchase() {
   
   const qtyInput = document.getElementById('purchase-qty');
   const priceInput = document.getElementById('purchase-price');
-  const qty = getRawQuantity(qtyInput);
-  const unitPrice = getRawNumber(priceInput);
+  const qty = getRawDecimal(qtyInput);
+  const unitPrice = getRawInteger(priceInput);
   const vatRate = parseFloat(document.getElementById('purchase-vat')?.value) || 0;
   const note = document.getElementById('purchase-note')?.value || '';
   
   if (!supplierId) return alert('Chọn nhà cung cấp');
   if (!mid) return alert('Chọn vật tư');
-   if (!qty || qty <= 0) return alert('Số lượng không hợp lệ');
+  if (!qty || qty <= 0) return alert('Số lượng không hợp lệ');
   if (!unitPrice || unitPrice <= 0) return alert('Đơn giá nhập không hợp lệ');
   
   const mat = matById(mid);
@@ -185,14 +184,14 @@ export function openTxnModal(type) {
     const updatePreview = () => {
       const mid = midSelect?.value;
       const mat = matById(mid);
-      const qty = getRawQuantity(qtyInput);
+      const qty = getRawDecimal(qtyInput);
       const total = (mat?.cost || 0) * qty;
       const previewEl = document.getElementById('preview-export-total');
       if (previewEl) previewEl.innerText = formatMoney(total);
     };
     
     if (qtyInput) {
-      qtyInput.addEventListener('input', handleQuantityInputRealTime);
+      qtyInput.addEventListener('input', handleDecimalInput);
       qtyInput.addEventListener('change', updatePreview);
     }
     if (midSelect) midSelect.addEventListener('change', updatePreview);
@@ -204,7 +203,7 @@ export function calculateExportTotal() {
   const mid = document.getElementById('txn-mid')?.value;
   const mat = matById(mid);
   const qtyInput = document.getElementById('txn-qty');
-  const qty = getRawQuantity(qtyInput);
+  const qty = getRawDecimal(qtyInput);
   const total = (mat?.cost || 0) * qty;
   const previewEl = document.getElementById('preview-export-total');
   if (previewEl) previewEl.innerText = formatMoney(total);
@@ -214,7 +213,7 @@ export function saveExport() {
   const projectId = document.getElementById('txn-project')?.value;
   const mid = document.getElementById('txn-mid')?.value;
   const qtyInput = document.getElementById('txn-qty');
-  const qty = getRawQuantity(qtyInput);
+  const qty = getRawDecimal(qtyInput);
   const note = document.getElementById('txn-note')?.value || '';
   
   if (!projectId) return alert('Chọn công trình');
@@ -251,28 +250,5 @@ export function saveExport() {
   if(window.render) window.render();
 }
 
-// ========== CÁC HÀM TOÀN CỤC CHO INLINE ==========
-window.previewInvoiceImage = function() {
-  const file = document.getElementById('purchase-invoice')?.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    window.currentInvoiceBase64 = e.target.result;
-    const previewDiv = document.getElementById('invoice-preview');
-    if (previewDiv) {
-      previewDiv.innerHTML = `<img src="${window.currentInvoiceBase64}" class="invoice-img" onclick="window.open(this.src)"><br><button class="sm" onclick="clearInvoiceImage()">🗑️ Xóa ảnh</button>`;
-    }
-  };
-  reader.readAsDataURL(file);
-};
-
-window.clearInvoiceImage = function() {
-  window.currentInvoiceBase64 = null;
-  const previewDiv = document.getElementById('invoice-preview');
-  if (previewDiv) previewDiv.innerHTML = '';
-  const fileInput = document.getElementById('purchase-invoice');
-  if (fileInput) fileInput.value = '';
-};
-
 // Export để sử dụng
-export { handleMoneyInputRealTime, handleQuantityInputRealTime, getRawNumber, getRawQuantity, setMoneyValue };
+export { handleIntegerInput, handleDecimalInput, getRawInteger, getRawDecimal };
