@@ -70,78 +70,88 @@ export function getPaneTitle() {
   return titles[state.currentPane] || '';
 }
 
-// ========== THÊM CÁC HÀM FORMAT TIỀN KHI NHẬP ==========
+// ========== THÊM CÁC HÀM FORMAT TIỀN REAL-TIME ==========
 
-// Format số hiển thị có dấu phân cách hàng nghìn
-export function formatNumberWithCommas(value) {
-    if (value === undefined || value === null || value === '') return '';
-    const numStr = value.toString().replace(/[^0-9.-]/g, '');
-    const num = parseFloat(numStr);
-    if (isNaN(num)) return '';
-    return num.toLocaleString('vi-VN');
-}
-
-// Chuyển chuỗi có dấu phân cách thành số
-export function unformatNumber(value) {
-    if (!value) return 0;
-    const numStr = value.toString().replace(/[^0-9.-]/g, '');
-    return parseFloat(numStr) || 0;
-}
-
-// Xử lý sự kiện input cho ô số tiền (vừa nhập vừa format)
-export function handleMoneyInput(event) {
+// Xử lý sự kiện input cho ô số tiền - format ngay khi gõ
+export function handleMoneyInputRealTime(event) {
     const input = event.target;
-    const rawValue = input.value.replace(/[^0-9]/g, '');
-    const number = parseInt(rawValue) || 0;
-    const formatted = number.toLocaleString('vi-VN');
-    input.value = formatted;
-    input.setSelectionRange(input.value.length, input.value.length);
+    // Lưu vị trí con trỏ
+    const cursorPos = input.selectionStart;
+    
+    // Lấy giá trị số từ input (chỉ lấy số)
+    let rawValue = input.value.replace(/[^0-9]/g, '');
+    
+    // Chuyển thành số
+    let number = parseInt(rawValue) || 0;
+    
+    // Format có dấu chấm phân cách
+    let formatted = number.toLocaleString('vi-VN');
+    
+    // Nếu giá trị thay đổi, cập nhật
+    if (input.value !== formatted) {
+        input.value = formatted;
+        // Đặt con trỏ về cuối
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
+    
+    // Trigger sự kiện change để cập nhật preview
+    const changeEvent = new Event('change', { bubbles: true });
+    input.dispatchEvent(changeEvent);
 }
 
-// Lấy giá trị số từ ô input đã format
-export function getMoneyValue(inputElement) {
+// Xử lý sự kiện input cho số lượng (hỗ trợ số thập phân)
+export function handleQuantityInputRealTime(event) {
+    const input = event.target;
+    
+    // Lấy giá trị, chỉ giữ số và dấu chấm
+    let value = input.value.replace(/[^0-9.]/g, '');
+    
+    // Xử lý nhiều dấu chấm
+    const parts = value.split('.');
+    if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Format phần nguyên
+    if (parts[0]) {
+        const integerPart = parseInt(parts[0]) || 0;
+        const formattedInteger = integerPart.toLocaleString('vi-VN');
+        if (parts.length > 1 && parts[1]) {
+            const newValue = formattedInteger + '.' + parts[1];
+            if (input.value !== newValue) {
+                input.value = newValue;
+                input.setSelectionRange(input.value.length, input.value.length);
+            }
+        } else {
+            if (input.value !== formattedInteger) {
+                input.value = formattedInteger;
+                input.setSelectionRange(input.value.length, input.value.length);
+            }
+        }
+    }
+    
+    // Trigger sự kiện change để cập nhật preview
+    const changeEvent = new Event('change', { bubbles: true });
+    input.dispatchEvent(changeEvent);
+}
+
+// Lấy giá trị số từ ô input đã format (bỏ dấu chấm)
+export function getRawNumber(inputElement) {
     if (!inputElement) return 0;
     const raw = inputElement.value.replace(/[^0-9]/g, '');
     return parseInt(raw) || 0;
 }
 
-// Format tiền cho value của input (dùng khi set giá trị)
-export function setMoneyInputValue(inputElement, value) {
+// Lấy giá trị số thập phân từ ô input số lượng
+export function getRawQuantity(inputElement) {
+    if (!inputElement) return 0;
+    const raw = inputElement.value.replace(/[^0-9.]/g, '');
+    return parseFloat(raw) || 0;
+}
+
+// Set giá trị cho input tiền (có format)
+export function setMoneyValue(inputElement, value) {
     if (!inputElement) return;
     const num = Number(value) || 0;
     inputElement.value = num.toLocaleString('vi-VN');
-}
-
-// Format số lượng (có thể có số thập phân)
-export function formatQuantityWithCommas(value) {
-    if (value === undefined || value === null || value === '') return '';
-    const parts = value.toString().split('.');
-    const integerPart = parseInt(parts[0]) || 0;
-    const formattedInteger = integerPart.toLocaleString('vi-VN');
-    if (parts.length > 1 && parts[1]) {
-        return formattedInteger + '.' + parts[1];
-    }
-    return formattedInteger;
-}
-
-// Xử lý sự kiện input cho số lượng (có thể có số thập phân)
-export function handleQuantityInput(event) {
-    const input = event.target;
-    let value = input.value.replace(/[^0-9.]/g, '');
-    const parts = value.split('.');
-    if (parts.length > 2) {
-        value = parts[0] + '.' + parts.slice(1).join('');
-    }
-    if (parts[0]) {
-        const integerPart = parseInt(parts[0]) || 0;
-        const formattedInteger = integerPart.toLocaleString('vi-VN');
-        if (parts.length > 1 && parts[1]) {
-            input.value = formattedInteger + '.' + parts[1];
-        } else {
-            input.value = formattedInteger;
-        }
-    } else {
-        input.value = value;
-    }
-    input.setSelectionRange(input.value.length, input.value.length);
 }
