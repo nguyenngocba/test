@@ -1,10 +1,50 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genPid, projectById, hasPermission } from './state.js';
 
+// ========== SỬA FILTER DÙNG BIẾN CỤC BỘ ==========
+let projectSearchKeyword = '';
+
+function getFilteredProjects() {
+    if (!projectSearchKeyword) return [...state.data.projects];
+    const kw = projectSearchKeyword.toLowerCase();
+    return state.data.projects.filter(p => p.name.toLowerCase().includes(kw) || p.id.toLowerCase().includes(kw));
+}
+
+function renderProjectSearchBar() {
+    return `
+        <div class="card" style="margin-bottom: 16px;">
+            <div class="sec-title">🔍 TÌM KIẾM CÔNG TRÌNH</div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="proj-search" placeholder="Tên hoặc mã công trình..." 
+                       value="${escapeHtml(projectSearchKeyword)}" style="flex: 1;">
+                <button id="proj-clear-search" class="sm">✖️ Xóa</button>
+            </div>
+        </div>
+    `;
+}
+
+function bindProjectSearchEvents() {
+    const searchInput = document.getElementById('proj-search');
+    const clearBtn = document.getElementById('proj-clear-search');
+    
+    const handleSearch = () => {
+        projectSearchKeyword = searchInput?.value || '';
+        if (window.render) window.render();
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    };
+    
+    if (searchInput) searchInput.oninput = handleSearch;
+    if (clearBtn) clearBtn.onclick = () => {
+        projectSearchKeyword = '';
+        if (window.render) window.render();
+        setTimeout(() => bindProjectSearchEvents(), 50);
+    };
+}
+
+// ========== SỬA LẠI HÀM renderProjects ==========
 export function renderProjects() {
-  const searchTerm = state.filters.projectSearch?.toLowerCase() || '';
-  const filteredProjects = state.data.projects.filter(p => p.name.toLowerCase().includes(searchTerm));
+  const filtered = getFilteredProjects();
   
-  const projectStats = filteredProjects.map(p => {
+  const projectStats = filtered.map(p => {
     const txnList = state.data.transactions.filter(t => t.projectId === p.id && t.type === 'usage');
     const totalCost = txnList.reduce((s, t) => s + (t.totalAmount || 0), 0);
     const items = txnList.length;
@@ -12,9 +52,8 @@ export function renderProjects() {
     return { ...p, totalCost, items, percent };
   });
   
-  return `<div class="card">
-    <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH</div>
-    <div class="search-box"><input type="text" id="project-search" placeholder="🔍 Tìm kiếm công trình..." value="${escapeHtml(state.filters.projectSearch || '')}" onkeyup="filterProjects()"><button class="sm" onclick="clearProjectSearch()">✖️ Xóa</button></div>
+  return renderProjectSearchBar() + `<div class="card">
+    <div class="sec-title">🏗️ DANH SÁCH CÔNG TRÌNH (${filtered.length})</div>
     <div class="grid2" style="grid-template-columns:repeat(auto-fit, minmax(320px,1fr));gap:16px;margin-bottom:24px">
       ${projectStats.map(p => `<div class="metric-card">
         <div style="display:flex;justify-content:space-between;align-items:center"><div class="metric-label">🏗️ ${escapeHtml(p.name)}</div><div class="tag">${p.items} lượt xuất</div></div>
@@ -27,8 +66,8 @@ export function renderProjects() {
     </div>
     <div class="sec-title">📊 CHI PHÍ THEO CÔNG TRÌNH</div><div style="height:260px"><canvas id="ch-project-cost"></canvas></div>
     <div class="sec-title" style="margin-top:20px">📜 LỊCH SỬ XUẤT KHO THEO CÔNG TRÌNH</div>
-    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></tr></thead>
-    <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!state.filters.projectSearch || projectById(t.projectId)?.name.toLowerCase().includes(state.filters.projectSearch.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
+    <div class="tbl-wrap"><table style="min-width:700px"><thead><tr><th>Công trình</th><th>Vật tư</th><th>Số lượng</th><th>Đơn giá</th><th>Tổng giá trị</th><th>Ngày xuất</th></table></thead>
+    <tbody>${state.data.transactions.filter(t => t.type === 'usage' && t.projectId && (!projectSearchKeyword || projectById(t.projectId)?.name.toLowerCase().includes(projectSearchKeyword.toLowerCase()))).sort((a,b)=>new Date(b.date) - new Date(a.date)).map(t => {
       const mat = state.data.materials.find(m => m.id === t.mid);
       const proj = projectById(t.projectId);
       return `<tr>
@@ -38,11 +77,15 @@ export function renderProjects() {
         <td>${formatMoney(t.unitPrice || mat?.cost || 0)}</td>
         <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
         <td>${t.date}</td>
-      </tr>`;
+      </table>`;
     }).join('') || '<tr><td colspan="6">📭 Chưa có dữ liệu xuất kho cho công trình nào</td></tr>'}</tbody></table></div>
   </div>`;
+  
+  // Gán sự kiện tìm kiếm sau khi render
+  setTimeout(() => bindProjectSearchEvents(), 50);
 }
 
+// Các hàm khác giữ nguyên
 export function openProjectModal() {
   if (!hasPermission('canCreateMaterial')) { alert('Bạn không có quyền thêm công trình'); return; }
   showModal(`<div class="modal-hd"><span class="modal-title">🏗️ Thêm công trình mới</span><button class="xbtn" onclick="closeModal()">✕</button></div>
@@ -78,12 +121,11 @@ export function deleteProject(pid) {
   saveState(); if(window.render) window.render();
 }
 
+// Giữ lại các hàm filter cũ để tương thích (có thể bỏ nếu không dùng)
 export function filterProjects() {
-  state.filters.projectSearch = document.getElementById('project-search')?.value || '';
-  if(window.render) window.render();
+  // Đã thay bằng bindProjectSearchEvents
 }
 
 export function clearProjectSearch() {
-  state.filters.projectSearch = '';
-  if(window.render) window.render();
+  // Đã thay bằng bindProjectSearchEvents
 }

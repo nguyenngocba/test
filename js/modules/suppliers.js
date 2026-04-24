@@ -1,13 +1,56 @@
 import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModal, genSid, supplierById, hasPermission } from './state.js';
 
+// ========== SỬA FILTER DÙNG BIẾN CỤC BỘ ==========
+let supplierSearchKeyword = '';
+
+function getFilteredSuppliers() {
+    if (!supplierSearchKeyword) return [...state.data.suppliers];
+    const kw = supplierSearchKeyword.toLowerCase();
+    return state.data.suppliers.filter(s => 
+        s.name.toLowerCase().includes(kw) || 
+        s.id.toLowerCase().includes(kw) ||
+        (s.phone && s.phone.includes(kw))
+    );
+}
+
+function renderSupplierSearchBar() {
+    return `
+        <div class="card" style="margin-bottom: 16px;">
+            <div class="sec-title">🔍 TÌM KIẾM NHÀ CUNG CẤP</div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="sup-search" placeholder="Tên, mã hoặc số điện thoại..." 
+                       value="${escapeHtml(supplierSearchKeyword)}" style="flex: 1;">
+                <button id="sup-clear-search" class="sm">✖️ Xóa</button>
+            </div>
+        </div>
+    `;
+}
+
+function bindSupplierSearchEvents() {
+    const searchInput = document.getElementById('sup-search');
+    const clearBtn = document.getElementById('sup-clear-search');
+    
+    const handleSearch = () => {
+        supplierSearchKeyword = searchInput?.value || '';
+        if (window.render) window.render();
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    };
+    
+    if (searchInput) searchInput.oninput = handleSearch;
+    if (clearBtn) clearBtn.onclick = () => {
+        supplierSearchKeyword = '';
+        if (window.render) window.render();
+        setTimeout(() => bindSupplierSearchEvents(), 50);
+    };
+}
+
+// ========== SỬA LẠI HÀM renderSuppliers ==========
 export function renderSuppliers() {
-  const searchTerm = state.filters.supplierSearch?.toLowerCase() || '';
-  const filteredSuppliers = state.data.suppliers.filter(s => s.name.toLowerCase().includes(searchTerm));
+  const filtered = getFilteredSuppliers();
   
-  return `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP</div>
-    <div class="search-box"><input type="text" id="supplier-search" placeholder="🔍 Tìm kiếm nhà cung cấp..." value="${escapeHtml(state.filters.supplierSearch || '')}" onkeyup="filterSuppliers()"><button class="sm" onclick="clearSupplierSearch()">✖️ Xóa</button></div>
+  return renderSupplierSearchBar() + `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
     <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
-      ${filteredSuppliers.map(s => {
+      ${filtered.map(s => {
         const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
         const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
         return `<div class="supplier-card">
@@ -26,8 +69,12 @@ export function renderSuppliers() {
     </div>
     <div id="supplier-history-modal" style="display:none"></div>
   </div>`;
+  
+  // Gán sự kiện tìm kiếm sau khi render
+  setTimeout(() => bindSupplierSearchEvents(), 50);
 }
 
+// Các hàm khác giữ nguyên
 export function openSupplierModal(supplier = null) {
   if (!hasPermission('canManageSupplier')) { alert('Bạn không có quyền quản lý nhà cung cấp'); return; }
   const isEdit = !!supplier;
@@ -85,15 +132,9 @@ export function deleteSupplier(sid) {
   saveState(); if(window.render) window.render();
 }
 
-export function filterSuppliers() {
-  state.filters.supplierSearch = document.getElementById('supplier-search')?.value || '';
-  if(window.render) window.render();
-}
-
-export function clearSupplierSearch() {
-  state.filters.supplierSearch = '';
-  if(window.render) window.render();
-}
+// Giữ lại các hàm filter cũ để tương thích
+export function filterSuppliers() {}
+export function clearSupplierSearch() {}
 
 export function viewSupplierHistory(sid) {
   const supplier = supplierById(sid);
@@ -107,10 +148,13 @@ export function viewSupplierHistory(sid) {
       <tbody>${purchaseTxns.map(t => {
         const mat = state.data.materials.find(m => m.id === t.mid);
         return `<tr>
-          <td>${t.date}</td><td>${mat?.name || 'N/A'}</td><td>${t.qty} ${mat?.unit || ''}</td>
-          <td>${formatMoney(t.unitPrice)}</td><td>${t.vatRate || 0}%</td>
+          <td>${t.date}</td>
+          <td>${mat?.name || 'N/A'}</td>
+          <td>${t.qty} ${mat?.unit || ''}</td>
+          <td>${formatMoney(t.unitPrice)}</td>
+          <td>${t.vatRate || 0}%</td>
           <td class="text-warning">${formatMoney(t.totalAmount || 0)}</td>
-        </table>`;
+        </tr>`;
       }).join('') || '<tr><td colspan="6">Chưa có giao dịch nào</td></tr>'}</tbody></table></div>
       ${purchaseTxns.filter(t => t.invoiceImage).length > 0 ? `<div class="sec-title" style="margin-top:16px">📎 Hóa đơn đính kèm</div>
       ${purchaseTxns.filter(t => t.invoiceImage).map(t => `<div><a href="${t.invoiceImage}" target="_blank">📄 Xem hóa đơn ngày ${t.date}</a></div>`).join('')}` : ''}
