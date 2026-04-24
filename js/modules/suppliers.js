@@ -2,6 +2,7 @@ import { state, saveState, addLog, formatMoney, escapeHtml, showModal, closeModa
 
 // ========== FILTER NHÀ CUNG CẤP ==========
 let supplierSearchKeyword = '';
+let supplierListContainer = null;
 
 function getFilteredSuppliers() {
     if (!supplierSearchKeyword) return [...state.data.suppliers];
@@ -11,6 +12,37 @@ function getFilteredSuppliers() {
         s.id.toLowerCase().includes(kw) ||
         (s.phone && s.phone.includes(kw))
     );
+}
+
+function updateSupplierList() {
+    if (!supplierListContainer) return;
+    const filtered = getFilteredSuppliers();
+    
+    if (filtered.length === 0) {
+        supplierListContainer.innerHTML = '<div class="metric-sub">📭 Không tìm thấy nhà cung cấp phù hợp</div>';
+        return;
+    }
+    
+    supplierListContainer.innerHTML = `
+        <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
+            ${filtered.map(s => {
+                const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
+                const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                return `<div class="supplier-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
+                    <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
+                    <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
+                    <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
+                    <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
+                    <div style="margin-top:8px;display:flex;gap:8px">
+                        <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
+                        <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
+                        <button class="sm" onclick="viewSupplierHistory('${s.id}')">📜 Lịch sử</button>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
+    `;
 }
 
 function renderSupplierSearchBar() {
@@ -32,15 +64,14 @@ function bindSupplierSearchEvents() {
     
     const handleSearch = () => {
         supplierSearchKeyword = searchInput?.value || '';
-        if (window.render) window.render();
-        setTimeout(() => bindSupplierSearchEvents(), 50);
+        updateSupplierList(); // Chỉ cập nhật danh sách, không render lại toàn bộ
     };
     
     if (searchInput) searchInput.oninput = handleSearch;
     if (clearBtn) clearBtn.onclick = () => {
         supplierSearchKeyword = '';
-        if (window.render) window.render();
-        setTimeout(() => bindSupplierSearchEvents(), 50);
+        if (searchInput) searchInput.value = '';
+        updateSupplierList();
     };
 }
 
@@ -48,29 +79,35 @@ function bindSupplierSearchEvents() {
 export function renderSuppliers() {
   const filtered = getFilteredSuppliers();
   
-  const result = renderSupplierSearchBar() + `<div class="card"><div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
-    <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
-      ${filtered.map(s => {
-        const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
-        const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
-        return `<div class="supplier-card">
-          <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
-          <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
-          <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
-          <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
-          <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
-          <div style="margin-top:8px;display:flex;gap:8px">
-            <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
-            <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
-            <button class="sm" onclick="viewSupplierHistory('${s.id}')">📜 Lịch sử</button>
-          </div>
-        </div>`;
-      }).join('')}
+  const result = renderSupplierSearchBar() + `<div class="card">
+    <div class="sec-title">🏭 DANH SÁCH NHÀ CUNG CẤP (${filtered.length})</div>
+    <div id="supplier-list-container">
+        <div class="grid2" style="grid-template-columns:repeat(auto-fill, minmax(350px,1fr))">
+            ${filtered.map(s => {
+                const purchaseTxns = state.data.transactions.filter(t => t.type === 'purchase' && t.supplierId === s.id);
+                const totalSpent = purchaseTxns.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                return `<div class="supplier-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center"><strong>${escapeHtml(s.name)}</strong> <span class="tag">${s.id}</span></div>
+                    <div class="metric-sub">📞 ${s.phone || 'Chưa có'}</div>
+                    <div class="metric-sub">✉️ ${s.email || 'Chưa có'}</div>
+                    <div class="metric-sub">📍 ${s.address || 'Chưa có'}</div>
+                    <div class="metric-sub" style="color:var(--success-text);margin-top:8px">💰 Tổng chi: ${formatMoney(totalSpent)}</div>
+                    <div style="margin-top:8px;display:flex;gap:8px">
+                        <button class="sm" onclick="openSupplierModal(${JSON.stringify(s).replace(/"/g, '&quot;')})">✏️ Sửa</button>
+                        <button class="sm danger-btn" onclick="deleteSupplier('${s.id}')">🗑️ Xóa</button>
+                        <button class="sm" onclick="viewSupplierHistory('${s.id}')">📜 Lịch sử</button>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
     </div>
     <div id="supplier-history-modal" style="display:none"></div>
   </div>`;
   
-  setTimeout(() => bindSupplierSearchEvents(), 50);
+  setTimeout(() => {
+      bindSupplierSearchEvents();
+      supplierListContainer = document.getElementById('supplier-list-container');
+  }, 50);
   return result;
 }
 
@@ -132,7 +169,6 @@ export function deleteSupplier(sid) {
   saveState(); if(window.render) window.render();
 }
 
-// Hàm giữ để tương thích
 export function filterSuppliers() {}
 export function clearSupplierSearch() {}
 
